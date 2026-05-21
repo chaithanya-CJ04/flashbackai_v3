@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/account/rewards)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/login)",
+      "Bash(python3 -c \"import json,sys; v=json.load\\(sys.stdin\\); print\\([x for x in v if x.startswith\\('3.'\\)][:10]\\)\")",
+      "Bash(grep -n \"encodeURIComponent\\(cursor\\)\\\\|kind=\\\\${encodeURIComponent\" /Users/jankutasaichaithanya/Desktop/flashbackai_v3/src/app/lib/api.ts)",
+      "Bash(grep -E \"^\\(eslint|next\\)$\")"
+    ]
+  }
+}

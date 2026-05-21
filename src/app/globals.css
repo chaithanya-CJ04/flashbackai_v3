@@ -1,0 +1,419 @@
+@import "tailwindcss";
+
+:root {
+  --background: #060418;
+  --foreground: #f4f0ff;
+  /* Brand: #7B73FD — the iris-violet from the logo */
+  --accent: 123, 115, 253;
+  --accent-deep: 80, 70, 210;
+  --accent-soft: 180, 173, 255;
+  /* Warm complement — champagne / amber, used sparingly for emotional warmth
+     against the cool violet base (memory, love, return) */
+  --warm: 240, 200, 154;
+  --warm-deep: 198, 154, 110;
+  /* Mint accent for achievement / completion states */
+  --mint: 159, 230, 194;
+  --rim: 255, 255, 255;
+}
+
+/* Honor user motion preferences — kill all animation and reduce transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif-display);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Cinematic violet light beams from top — tuned to the logo's iris hue. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -10% -10% auto -10%;
+  height: 80vh;
+  z-index: -2;
+  background:
+    /* main central beam */
+    conic-gradient(
+      from 200deg at 50% -10%,
+      transparent 0deg,
+      rgba(var(--accent-soft), 0.0) 152deg,
+      rgba(var(--accent-soft), 0.22) 158deg,
+      rgba(var(--accent), 0.38) 168deg,
+      rgba(var(--accent-soft), 0.22) 178deg,
+      rgba(var(--accent-soft), 0.0) 184deg,
+      transparent 360deg
+    ),
+    /* secondary off-axis beam */
+    conic-gradient(
+      from 215deg at 75% -10%,
+      transparent 0deg,
+      rgba(var(--accent), 0.0) 155deg,
+      rgba(var(--accent), 0.20) 162deg,
+      rgba(var(--accent-soft), 0.10) 170deg,
+      transparent 178deg,
+      transparent 360deg
+    );
+  filter: blur(6px);
+  opacity: 0.95;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* Deep violet base + warm horizon + mid-height glows.
+   Memory cosmos: feels populated without animation, GPU-cheap (static). */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background:
+    /* Top — violet halo */
+    radial-gradient(60% 50% at 50% 0%, rgba(var(--accent-deep), 0.28) 0%, transparent 70%),
+    /* Mid-left — soft iris bloom */
+    radial-gradient(40% 35% at 14% 42%, rgba(var(--accent), 0.16) 0%, transparent 70%),
+    /* Mid-right — distant warm ember */
+    radial-gradient(35% 30% at 86% 58%, rgba(var(--warm), 0.10) 0%, transparent 75%),
+    /* Bottom — warm horizon */
+    radial-gradient(70% 35% at 50% 115%, rgba(var(--warm), 0.12) 0%, transparent 80%),
+    /* Sink toward black at the very bottom */
+    radial-gradient(80% 70% at 50% 110%, rgba(0, 0, 0, 1) 0%, transparent 70%),
+    /* Base gradient */
+    linear-gradient(180deg, #0a0820 0%, #07051a 50%, #040312 100%);
+}
+
+/* Constellation layer — tiny static glints scattered across the canvas.
+   Each is a sub-pixel radial gradient; the browser composites them once
+   and never repaints. Zero GPU cost after first paint, no animation. */
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.7;
+  background-image:
+    /* Larger glints (iris-tinted) */
+    radial-gradient(1.6px 1.6px at 12% 18%, rgba(180, 173, 255, 0.85), transparent 60%),
+    radial-gradient(1.4px 1.4px at 78% 26%, rgba(180, 173, 255, 0.7), transparent 60%),
+    radial-gradient(1.8px 1.8px at 33% 71%, rgba(180, 173, 255, 0.65), transparent 60%),
+    radial-gradient(1.4px 1.4px at 86% 78%, rgba(180, 173, 255, 0.6), transparent 60%),
+    /* Champagne sparks */
+    radial-gradient(1.4px 1.4px at 64% 46%, rgba(240, 200, 154, 0.55), transparent 60%),
+    radial-gradient(1.2px 1.2px at 22% 88%, rgba(240, 200, 154, 0.4), transparent 60%),
+    /* Tiny white pinpricks — distant stars */
+    radial-gradient(1px 1px at 8% 56%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 28% 36%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 44% 14%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 56% 84%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 72% 60%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 92% 12%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 4% 8%, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 18% 64%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1px 1px at 80% 44%, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 38% 92%, rgba(255, 255, 255, 0.35), transparent 60%),
+    radial-gradient(1px 1px at 66% 8%, rgba(255, 255, 255, 0.45), transparent 60%);
+  background-repeat: no-repeat;
+  /* The pattern repeats across viewport tiles, so glints feel evenly scattered */
+  background-size: 100vw 100vh;
+}
+
+/* Selection */
+::selection {
+  background: rgba(var(--accent), 0.4);
+  color: #fff;
+}
+
+/* Subtle scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* ────────────────────────────────────────────────────────────────────
+   TYPOGRAPHY SYSTEM
+   ────────────────────────────────────────────────────────────────────
+   Three font families:
+     .serif        Instrument Serif — emotional headlines & quotations
+     .display-sans Geist Sans bold uppercase — section / hero titles
+     (default)     Geist Sans regular — body copy
+     <mono>        Geist Mono — labels, meta, eyebrows (via .eyebrow/.meta)
+
+   One canonical scale (use these instead of text-[10px] / text-xs):
+     .text-mega     hero blasts            (44–96px fluid)
+     .text-hero     full-page intros        (40–80px)
+     .text-display  large screen titles     (32–60px)
+     .text-headline section headings        (24–36px)
+     .text-title    card titles             (18–24px)
+     .text-body     paragraph copy          (14–16px)
+     .text-caption  short helper / hint     (12–13px)
+     .text-meta     mono / uppercase label  (10–11px)
+
+   Three foreground tints (use these instead of /40 /45 /50 /55 /65 /70…):
+     .text-primary     0.92 — headings, key value
+     .text-secondary   0.62 — body, descriptions
+     .text-tertiary    0.40 — meta, captions, hints
+   ──────────────────────────────────────────────────────────────────── */
+
+.serif {
+  font-family: var(--font-serif-display), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.display-sans {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: clamp(9px, 0.55rem + 0.1vw, 11px);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Inline mono label — same family/weight as .eyebrow but no implied color or
+   size opinion; pair with .text-meta + a tint class. Use for "1d ago",
+   "Source · X", "20 turns", and the recurring tab/badge labels. */
+.label-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+/* Fluid type scale */
+.text-mega { font-size: clamp(2.75rem, 1.7rem + 5.5vw, 6rem); line-height: 0.95; letter-spacing: -0.02em; }
+.text-hero { font-size: clamp(2.5rem, 1.6rem + 4.5vw, 5rem); line-height: 1.04; letter-spacing: -0.01em; }
+.text-display { font-size: clamp(2rem, 1.3rem + 3.2vw, 3.75rem); line-height: 1.08; letter-spacing: -0.01em; }
+.text-headline { font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.25rem); line-height: 1.15; letter-spacing: -0.005em; }
+.text-title { font-size: clamp(1.125rem, 1rem + 0.6vw, 1.5rem); line-height: 1.3; }
+.text-body { font-size: clamp(0.875rem, 0.82rem + 0.2vw, 1rem); line-height: 1.6; }
+.text-caption { font-size: clamp(0.75rem, 0.72rem + 0.1vw, 0.8125rem); line-height: 1.5; }
+.text-meta { font-size: clamp(0.625rem, 0.6rem + 0.1vw, 0.6875rem); line-height: 1.4; }
+
+/* Semantic foreground tints — three steps, that's all you need. */
+.text-primary   { color: rgba(255, 255, 255, 0.92); }
+.text-secondary { color: rgba(255, 255, 255, 0.62); }
+.text-tertiary  { color: rgba(255, 255, 255, 0.40); }
+
+/* ────────────────────────────────────────────────────────────────────
+   SPACING SYSTEM
+   ────────────────────────────────────────────────────────────────────
+   Screen edges:  always come from <PageShell>. Never override px-/pt- on
+                  pages — let the shell own horizontal padding.
+
+   Vertical rhythm (top-level stacks):
+     .stack-section   mb-10 sm:mb-12   — between major sections
+     .stack-block     mb-6 sm:mb-8     — between blocks within a section
+     .stack-tight     mb-3             — sibling rows / form-field follow-ups
+
+   List spacing (gap between RowLink / Card list items):
+     space-y-2.5    list rows
+     space-y-4      card stacks (forms, dashboards)
+     space-y-6      form fields
+
+   Card padding (inside a Card / RowLink):
+     compact:  p-4
+     default:  p-5
+     hero:     p-6 sm:p-8
+   ──────────────────────────────────────────────────────────────────── */
+
+.stack-section { margin-bottom: 2.5rem; }
+@media (min-width: 640px) { .stack-section { margin-bottom: 3rem; } }
+.stack-block   { margin-bottom: 1.5rem; }
+@media (min-width: 640px) { .stack-block { margin-bottom: 2rem; } }
+.stack-tight   { margin-bottom: 0.75rem; }
+
+/* Safe-area aware bottom padding (iOS) */
+.pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+/* No-scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Hairline border helpers */
+.hairline { border: 1px solid rgba(255, 255, 255, 0.07); }
+.hairline-strong { border: 1px solid rgba(255, 255, 255, 0.14); }
+
+/* The signature gradient-pill button look from the references */
+.cta-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 2rem;
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: white;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 18%),
+    linear-gradient(180deg, rgba(var(--accent), 0.95) 0%, rgba(var(--accent-deep), 1) 100%);
+  border: 1px solid rgba(var(--accent-soft), 0.55);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 12px 40px -10px rgba(var(--accent), 0.55),
+    0 0 60px -10px rgba(var(--accent-soft), 0.35);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  overflow: hidden;
+  isolation: isolate;
+}
+.cta-pill::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  top: -40%;
+  width: 24%;
+  height: 220%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.75), transparent 70%);
+  filter: blur(8px);
+  z-index: 0;
+  pointer-events: none;
+  animation: shimmer 5s ease-in-out infinite;
+}
+.cta-pill > * { position: relative; z-index: 1; }
+.cta-pill:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 18px 50px -10px rgba(var(--accent), 0.7),
+    0 0 80px -10px rgba(var(--accent-soft), 0.45);
+}
+.cta-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cta-pill::before {
+  /* shimmer made slower + a touch dimmer — signature, not restless */
+  animation-duration: 7s;
+}
+
+@keyframes shimmer {
+  0%, 100% { left: 12%; opacity: 0.55; }
+  50% { left: 65%; opacity: 0.95; }
+}
+
+/* Glassmorphic panel — floating cards over the animated hex grid.
+   Dark translucent backing + a hairline top highlight (inset shadow) so the
+   pattern behind never bleeds through and washes out the card. */
+.glass {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(40, 32, 64, 0.55) 0%,
+      rgba(18, 14, 32, 0.65) 100%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(176, 130, 255, 0.04),
+    0 30px 80px -30px rgba(0, 0, 0, 0.75);
+}
+
+/* Logo motif: three stacked translucent pills rotated slightly off-axis.
+   Used as decoration on empty states, loading, and section anchors. */
+.brand-stack {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 64px;
+}
+.brand-stack::before,
+.brand-stack::after,
+.brand-stack > span {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+}
+.brand-stack > span {
+  left: 8%;
+  top: 16%;
+  width: 78%;
+  height: 18%;
+  transform: rotate(-7deg);
+  background: rgba(255, 255, 255, 0.85);
+}
+.brand-stack::before {
+  left: 18%;
+  top: 42%;
+  width: 64%;
+  height: 18%;
+  transform: rotate(6deg);
+  background: rgba(255, 255, 255, 0.55);
+}
+.brand-stack::after {
+  left: 30%;
+  top: 68%;
+  width: 38%;
+  height: 18%;
+  transform: rotate(-12deg);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Subtle "breath" — three pulsing dots for waiting / listening states.
+   Sequenced via animation-delay, GPU-only (opacity + transform). */
+@keyframes breath {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1); }
+}
+.breath-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.breath-dots > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(var(--accent-soft), 0.95);
+  display: inline-block;
+  animation: breath 1.6s ease-in-out infinite;
+}
+.breath-dots > span:nth-child(2) { animation-delay: 0.2s; }
+.breath-dots > span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Editorial italic — paired with display-sans for typographic compositions. */
+.serif-italic {
+  font-family: var(--font-serif-display), Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
