@@ -5,7 +5,14 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/login)",
       "Bash(python3 -c \"import json,sys; v=json.load\\(sys.stdin\\); print\\([x for x in v if x.startswith\\('3.'\\)][:10]\\)\")",
       "Bash(grep -n \"encodeURIComponent\\(cursor\\)\\\\|kind=\\\\${encodeURIComponent\" /Users/jankutasaichaithanya/Desktop/flashbackai_v3/src/app/lib/api.ts)",
-      "Bash(grep -E \"^\\(eslint|next\\)$\")"
+      "Bash(grep -E \"^\\(eslint|next\\)$\")",
+      "Bash(curl -sS -o /tmp/fb-head.html -w \"STATUS:%{http_code}\\\\nSIZE:%{size_download}\\\\n\" http://localhost:5173/login)",
+      "Bash(curl -sS -o /tmp/og.png -w \"OG status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/opengraph-image?d4ecf55d2ace08fb\")",
+      "Bash(curl -sS -o /tmp/apple.png -w \"APPLE status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/apple-icon?abb0a16669322339\")",
+      "Bash(curl -sS -o /tmp/manifest.json -w \"MANIFEST status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/manifest.webmanifest\")",
+      "Bash(curl -sS -o /tmp/og2.png -w \"OG status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/opengraph-image\")",
+      "Bash(curl -sS -o /tmp/apple2.png -w \"APPLE status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/apple-icon\")",
+      "Bash(curl -sS http://localhost:5173/legacies -o /tmp/leg.html -w \"%{http_code}\\\\n\")"
     ]
   }
 }

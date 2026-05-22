@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { WalletProviders } from "./components/WalletProviders";
@@ -21,9 +21,59 @@ const serifDisplay = Instrument_Serif({
   subsets: ["latin"],
 });
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:5173";
+const TAGLINE = "A private archive for the people who shaped you.";
+
 export const metadata: Metadata = {
-  title: "Flashback AI",
-  description: "A place to keep someone close.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Flashback — A place to keep someone close",
+    template: "%s · Flashback",
+  },
+  description: TAGLINE,
+  applicationName: "Flashback",
+  generator: "Next.js",
+  keywords: [
+    "Flashback",
+    "memory",
+    "legacy",
+    "private archive",
+    "remembrance",
+    "AI companion",
+  ],
+  authors: [{ name: "Flashback Labs" }],
+  creator: "Flashback Labs",
+  publisher: "Flashback Labs",
+  formatDetection: { email: false, address: false, telephone: false },
+  manifest: "/manifest.webmanifest",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Flashback",
+    title: "Flashback — A place to keep someone close",
+    description: TAGLINE,
+    url: SITE_URL,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Flashback — A place to keep someone close",
+    description: TAGLINE,
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Flashback",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#060418" },
+    { media: "(prefers-color-scheme: light)", color: "#7B73FD" },
+  ],
+  colorScheme: "dark",
 };
 
 export default function RootLayout({

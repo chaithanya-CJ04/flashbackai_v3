@@ -54,16 +54,38 @@ export function AppHeader({
             {title}
           </p>
         ) : (
-          <span className="inline-flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.svg"
-              alt="Flashback AI"
-              className="h-7 w-7 rounded-[8px] shadow-[0_4px_16px_-2px_rgba(123,115,253,0.5)]"
-            />
-            <span className="label-mono text-meta text-secondary">
-              Flashback AI
+          <span className="relative inline-flex items-center gap-2.5">
+            <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -inset-2 rounded-full bg-[radial-gradient(closest-side,rgba(123,115,253,0.5),transparent_70%)] blur-[3px]"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.svg"
+                alt=""
+                className="relative h-8 w-8 rounded-[9px] shadow-[0_8px_22px_-6px_rgba(123,115,253,0.6)] ring-1 ring-white/5"
+              />
             </span>
+            <span className="inline-flex items-baseline gap-2">
+              <span className="display-sans text-[15px] leading-none tracking-[-0.01em] text-primary">
+                FLASHBACK
+              </span>
+              <span
+                className="display-sans text-[15px] leading-none tracking-[-0.01em]"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, rgba(var(--accent-soft),1) 0%, rgba(var(--accent),1) 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  textShadow: "0 0 18px rgba(180,173,255,0.35)",
+                }}
+              >
+                AI
+              </span>
+            </span>
+            <span className="sr-only">Flashback AI</span>
           </span>
         )}
       </div>
