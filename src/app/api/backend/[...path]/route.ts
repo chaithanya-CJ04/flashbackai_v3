@@ -63,6 +63,30 @@ async function proxy(req: Request, pathParts: string[]) {
   const resHeaders = new Headers(upstreamRes.headers)
   resHeaders.delete('content-encoding')
 
+  // Log upstream 5xx with a peek at the response body so the cause is
+  // visible in the dev-server terminal. We tee the body so the response
+  // stream still reaches the client untouched.
+  if (upstreamRes.status >= 500 && upstreamRes.body) {
+    const [forClient, forLog] = upstreamRes.body.tee()
+    forLog
+      .getReader()
+      .read()
+      .then(async ({ value }) => {
+        const text = value ? new TextDecoder().decode(value).slice(0, 800) : ''
+        // eslint-disable-next-line no-console
+        console.error(
+          `[proxy 5xx] ${method} ${pathParts.join('/')} → ${upstreamRes.status}`,
+          text || '(empty body)'
+        )
+      })
+      .catch(() => {})
+    return new Response(forClient, {
+      status: upstreamRes.status,
+      statusText: upstreamRes.statusText,
+      headers: resHeaders,
+    })
+  }
+
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
     statusText: upstreamRes.statusText,

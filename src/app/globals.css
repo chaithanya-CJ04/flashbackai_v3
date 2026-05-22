@@ -42,6 +42,7 @@ body {
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -49,6 +50,21 @@ body {
   position: relative;
   min-height: 100vh;
   overflow-x: hidden;
+  /* Mobile: kill the grey iOS tap flash; we draw our own press states. */
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent pinch-jumpy header on iOS while scrolling */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Mobile: stop touch-action double-tap zoom on interactive elements so taps
+   feel native-app instant. Excludes form fields where iOS auto-zoom needs
+   the default behavior. */
+button,
+a,
+[role="button"],
+[role="link"] {
+  touch-action: manipulation;
 }
 
 /* Cinematic violet light beams from top — tuned to the logo's iris hue. */
@@ -202,35 +218,51 @@ html::before {
 
 .eyebrow {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: clamp(9px, 0.55rem + 0.1vw, 11px);
-  letter-spacing: 0.28em;
+  font-size: clamp(11px, 0.7rem + 0.1vw, 13px);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 /* Inline mono label — same family/weight as .eyebrow but no implied color or
    size opinion; pair with .text-meta + a tint class. Use for "1d ago",
-   "Source · X", "20 turns", and the recurring tab/badge labels. */
+   "Source · X", "20 turns", and the recurring tab/badge labels.
+   Tracking reduced from 0.25em → 0.16em for legibility — wide tracking is
+   harder for older eyes and impaired readers. */
 .label-mono {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-/* Fluid type scale */
+/* Fluid type scale — bumped one notch across the board for legibility.
+   Target audience includes older users and people with cognitive impairment,
+   so body copy starts at 16px (never below the iOS legibility floor) and
+   meta/caption are large enough to read without effort. */
 .text-mega { font-size: clamp(2.75rem, 1.7rem + 5.5vw, 6rem); line-height: 0.95; letter-spacing: -0.02em; }
 .text-hero { font-size: clamp(2.5rem, 1.6rem + 4.5vw, 5rem); line-height: 1.04; letter-spacing: -0.01em; }
 .text-display { font-size: clamp(2rem, 1.3rem + 3.2vw, 3.75rem); line-height: 1.08; letter-spacing: -0.01em; }
-.text-headline { font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.25rem); line-height: 1.15; letter-spacing: -0.005em; }
-.text-title { font-size: clamp(1.125rem, 1rem + 0.6vw, 1.5rem); line-height: 1.3; }
-.text-body { font-size: clamp(0.875rem, 0.82rem + 0.2vw, 1rem); line-height: 1.6; }
-.text-caption { font-size: clamp(0.75rem, 0.72rem + 0.1vw, 0.8125rem); line-height: 1.5; }
-.text-meta { font-size: clamp(0.625rem, 0.6rem + 0.1vw, 0.6875rem); line-height: 1.4; }
+.text-headline { font-size: clamp(1.625rem, 1.25rem + 1.7vw, 2.375rem); line-height: 1.15; letter-spacing: -0.005em; }
+.text-title { font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem); line-height: 1.3; }
+.text-body { font-size: clamp(1rem, 0.94rem + 0.25vw, 1.125rem); line-height: 1.6; }
+.text-caption { font-size: clamp(0.875rem, 0.84rem + 0.15vw, 0.9375rem); line-height: 1.55; }
+.text-meta { font-size: clamp(0.75rem, 0.72rem + 0.12vw, 0.8125rem); line-height: 1.45; }
 
-/* Semantic foreground tints — three steps, that's all you need. */
-.text-primary   { color: rgba(255, 255, 255, 0.92); }
-.text-secondary { color: rgba(255, 255, 255, 0.62); }
-.text-tertiary  { color: rgba(255, 255, 255, 0.40); }
+/* Semantic foreground tints — three steps. Lifted from 0.92/0.62/0.40
+   to 0.97/0.82/0.66 so secondary and tertiary text both clear WCAG AA
+   contrast against the dark background. Older eyes lose contrast
+   sensitivity first; never let copy fall below ~0.65 opacity. */
+.text-primary   { color: rgba(255, 255, 255, 0.97); }
+.text-secondary { color: rgba(255, 255, 255, 0.82); }
+.text-tertiary  { color: rgba(255, 255, 255, 0.66); }
+
+/* Global focus-visible ring — never let keyboard users get lost.
+   The accent-soft halo + offset reads clearly against every surface. */
+:focus-visible {
+  outline: 2px solid rgba(var(--accent-soft), 0.85);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
 /* ────────────────────────────────────────────────────────────────────
    SPACING SYSTEM
@@ -267,9 +299,10 @@ html::before {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 
-/* Hairline border helpers */
-.hairline { border: 1px solid rgba(255, 255, 255, 0.07); }
-.hairline-strong { border: 1px solid rgba(255, 255, 255, 0.14); }
+/* Hairline border helpers — bumped from 0.07/0.14 to 0.20/0.32 so the
+   edge actually reads against the dark cosmos background for older eyes. */
+.hairline { border: 1px solid rgba(255, 255, 255, 0.20); }
+.hairline-strong { border: 1px solid rgba(255, 255, 255, 0.32); }
 
 /* The signature gradient-pill button look from the references */
 .cta-pill {
@@ -315,6 +348,16 @@ html::before {
     0 18px 50px -10px rgba(var(--accent), 0.7),
     0 0 80px -10px rgba(var(--accent-soft), 0.45);
 }
+/* Tactile press — fires on touch (mobile) and mouse-down. Slight scale and
+   shadow compression sells the "I pushed a real button" feeling. */
+.cta-pill:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 80ms;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 6px 20px -8px rgba(var(--accent), 0.55),
+    0 0 30px -10px rgba(var(--accent-soft), 0.25);
+}
 .cta-pill:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .cta-pill::before {
@@ -334,15 +377,15 @@ html::before {
   background:
     linear-gradient(
       180deg,
-      rgba(40, 32, 64, 0.55) 0%,
-      rgba(18, 14, 32, 0.65) 100%
+      rgba(40, 32, 64, 0.78) 0%,
+      rgba(18, 14, 32, 0.86) 100%
     );
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(28px) saturate(140%);
   -webkit-backdrop-filter: blur(28px) saturate(140%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 0 1px rgba(176, 130, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(176, 130, 255, 0.08),
     0 30px 80px -30px rgba(0, 0, 0, 0.75);
 }
 
@@ -416,4 +459,155 @@ html::before {
   font-style: italic;
   font-weight: 400;
   letter-spacing: -0.005em;
+}
+
+/* Step entrance — soft fade + rise. Used by onboarding/new step content so
+   each step composes itself instead of snapping in. */
+@keyframes stepIn {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.step-in {
+  animation: stepIn 480ms cubic-bezier(0.22, 0.65, 0.32, 1) both;
+}
+.step-in-delayed {
+  animation: stepIn 600ms 120ms cubic-bezier(0.22, 0.65, 0.32, 1) both;
+}
+
+/* Slow drift for ambient orbs — used behind the live preview to give the
+   sense that something living is composing itself on screen. */
+@keyframes orbDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  50%      { transform: translate3d(4%, -3%, 0) scale(1.08); opacity: 0.75; }
+}
+.orb-drift {
+  animation: orbDrift 9s ease-in-out infinite;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   PRESS / TAP FEEDBACK
+   ────────────────────────────────────────────────────────────────────
+   `.press` adds a quick scale-down on :active that reads as a tactile
+   tap on touch screens. Apply to any tappable surface that doesn't have
+   its own active treatment (cards, list rows, chips). Honors
+   prefers-reduced-motion via the global override above. */
+.press {
+  transition: transform 200ms cubic-bezier(0.22, 0.65, 0.32, 1), box-shadow 200ms ease, border-color 200ms ease, background-color 200ms ease;
+}
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+/* Stronger press variant for primary tiles / portrait cards. */
+.press-soft {
+  transition: transform 240ms cubic-bezier(0.22, 0.65, 0.32, 1), box-shadow 240ms ease, border-color 240ms ease;
+}
+.press-soft:active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: 90ms;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   SKELETONS
+   ────────────────────────────────────────────────────────────────────
+   `.skeleton` is a low-cost shimmering placeholder that picks up the
+   same dark-glass surface used elsewhere. Designed so a skeleton view
+   feels like the real layout warming up — not a grey rectangle. */
+@keyframes skeletonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(176, 130, 255, 0.10) 50%,
+      rgba(255, 255, 255, 0.04) 100%
+    );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s linear infinite;
+  border-radius: 12px;
+}
+.skeleton-card {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1rem;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(18, 15, 34, 0.70) 0%,
+      rgba(32, 24, 58, 0.85) 50%,
+      rgba(18, 15, 34, 0.70) 100%
+    );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.8s linear infinite;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   MOBILE-FIRST UTILITIES
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Safe-area aware top padding — used on full-screen overlays so iOS
+   notch / Dynamic Island never clips the header. */
+.pt-safe { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+
+/* Composer-aware bottom padding for scrollable conversation lists, so
+   the last message clears the fixed composer. */
+.pb-composer { padding-bottom: clamp(14rem, 32vh, 17rem); }
+
+/* Page padding for screens that show the BottomNav so the last card
+   never tucks under it on mobile (BottomNav height ~76px + safe area). */
+.pb-nav { padding-bottom: max(6.5rem, calc(5.5rem + env(safe-area-inset-bottom))); }
+
+/* Horizontal-scroll fade — applied to chip rows and badge strips so the
+   user gets a clean "more →" affordance instead of a hard edge. */
+.scroll-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, black 16px, black calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, black 16px, black calc(100% - 24px), transparent 100%);
+}
+
+/* Wider edge-fade for the portrait deck so the leftmost and rightmost
+   portraits melt into the cosmos background instead of being chopped at
+   the viewport edge. Falloff is ~8% on each side — enough to feel airy
+   without hiding visible cards. */
+.deck-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, black 8%, black 92%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, black 8%, black 92%, transparent 100%);
+}
+
+/* Pull-to-refresh feel: when the user over-scrolls a list at the top on
+   mobile, bounce instead of revealing the body background. */
+.bounce-y { overscroll-behavior-y: contain; }
+
+/* Subtle hover lift used on the Portrait cards in legacies — exposed as a
+   utility so the same easing reads identically across screens. */
+.lift-hover {
+  transition: transform 360ms cubic-bezier(0.22, 0.65, 0.32, 1), box-shadow 360ms ease;
+}
+@media (hover: hover) {
+  .lift-hover:hover { transform: translateY(-3px); }
+}
+.lift-hover:active { transform: scale(0.98); transition-duration: 90ms; }
+
+/* Soft entrance — used to stagger list items into view on first load. */
+@keyframes riseIn {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: riseIn 520ms cubic-bezier(0.22, 0.65, 0.32, 1) both;
+}
+
+/* Soft pulsing glow — used on "live" indicators (recording, active session,
+   thinking). Subtler than ping; brand-tinted. */
+@keyframes liveGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-soft), 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(var(--accent-soft), 0); }
+}
+.live-glow {
+  animation: liveGlow 1.8s ease-out infinite;
+  border-radius: 999px;
 }

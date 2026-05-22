@@ -7,6 +7,7 @@ import { AuthedVideo } from "../../../../components/VideoLightbox";
 import {
   Card,
   ErrorBanner,
+  PageLoader,
   PageShell,
   Spinner,
 } from "../../../../components/ui";
@@ -40,9 +41,7 @@ export default function MomentDetailPage({
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader label="Opening moment" />
       </PageShell>
     );
   }
@@ -61,9 +60,7 @@ export default function MomentDetailPage({
       )}
 
       {!moment ? (
-        <div className="flex items-center gap-2 text-xs text-tertiary">
-          <Spinner /> Loading moment…
-        </div>
+        <PageLoader label="Loading moment" />
       ) : (
         <div className="space-y-4">
           {moment.videoUrl &&

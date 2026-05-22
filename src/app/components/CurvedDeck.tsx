@@ -20,11 +20,14 @@ export function CurvedDeck({
   children,
   bend = 70,
   rotation = 7,
-  wheelSpeed = 0.7,
+  // Wheel sensitivity tuned so one trackpad/mouse tick advances by ~one
+  // portrait-width, not the entire deck. Drag (finger 1:1) is unaffected.
+  // +10% bump from the initial 0.12 / 18 baseline.
+  wheelSpeed = 0.132,
   dragMultiplier = 1.1,
   inertia = 0.95,
   inertiaBoost = 16,
-  maxVelocity = 90,
+  maxVelocity = 20,
   className = "",
 }: {
   children: ReactNode[];
@@ -146,7 +149,20 @@ export function CurvedDeck({
       // Pick the larger axis so trackpad horizontal-swipe also works.
       const dy = e.deltaY ?? 0;
       const dx = e.deltaX ?? 0;
-      const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      const raw = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      if (raw === 0) return;
+
+      // Cursor is on the deck — always trap the wheel here. The deck eats
+      // every tick and the page stays put, even when the deck has nothing
+      // more to give (clamps quietly at its bounds via clampPosition).
+      // Listener is registered passive:false so preventDefault is honored.
+      e.preventDefault();
+
+      // Cap per-tick delta — macOS trackpads can emit huge deltaY values
+      // (>500) on a single swipe which would otherwise blast the deck
+      // across the entire row. We keep direction, clamp magnitude.
+      const delta = Math.sign(raw) * Math.min(Math.abs(raw), 50);
+
       // Feed wheel into velocity (not position) so it shares the same decay
       // curve as a flick — continuous physics, no lurches.
       velocity += delta * wheelSpeed;
@@ -221,7 +237,7 @@ export function CurvedDeck({
       }
     };
 
-    viewport.addEventListener("wheel", onWheel, { passive: true });
+    viewport.addEventListener("wheel", onWheel, { passive: false });
     viewport.addEventListener("pointerdown", onPointerDown);
     viewport.addEventListener("click", onClickCapture, { capture: true });
 

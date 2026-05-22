@@ -12,7 +12,12 @@
       "Bash(curl -sS -o /tmp/manifest.json -w \"MANIFEST status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/manifest.webmanifest\")",
       "Bash(curl -sS -o /tmp/og2.png -w \"OG status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/opengraph-image\")",
       "Bash(curl -sS -o /tmp/apple2.png -w \"APPLE status:%{http_code} type:%{content_type} size:%{size_download}\\\\n\" \"http://localhost:5173/apple-icon\")",
-      "Bash(curl -sS http://localhost:5173/legacies -o /tmp/leg.html -w \"%{http_code}\\\\n\")"
+      "Bash(curl -sS http://localhost:5173/legacies -o /tmp/leg.html -w \"%{http_code}\\\\n\")",
+      "Bash(sed -n '93,105p' src/app/account/vault/page.tsx)",
+      "Bash(sed -n '30,40p' src/app/account/vault/page.tsx)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/onboarding/new)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/explore)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/account)"
     ]
   }
 }

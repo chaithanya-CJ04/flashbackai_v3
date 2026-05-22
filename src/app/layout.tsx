@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProviders } from "./components/WalletProviders";
 import { BottomNav } from "./components/BottomNav";
 import ShapeGrid from "./components/ShapeGrid";
+import { OfflineBanner, ToastProvider } from "./components/ui";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -74,6 +75,14 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#7B73FD" },
   ],
   colorScheme: "dark",
+  // viewport-fit=cover lets env(safe-area-inset-*) resolve on iOS so the
+  // BottomNav, composer, and OfflineBanner respect the notch / home indicator.
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  // Allow user-pinch on content; the form/text-zoom inputs are already
+  // sized ≥16px so iOS won't auto-zoom on focus.
+  maximumScale: 5,
 };
 
 export default function RootLayout({
@@ -108,8 +117,11 @@ export default function RootLayout({
         </div>
         <div className="relative z-10 flex min-h-full flex-1 flex-col">
           <WalletProviders>
-            {children}
-            <BottomNav />
+            <ToastProvider>
+              <OfflineBanner />
+              {children}
+              <BottomNav />
+            </ToastProvider>
           </WalletProviders>
         </div>
       </body>

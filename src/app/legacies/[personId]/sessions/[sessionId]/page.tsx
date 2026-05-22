@@ -6,9 +6,8 @@ import { AppHeader } from "../../../../components/AppHeader";
 import {
   BreathDots,
   Button,
-  Card,
   ErrorBanner,
-  Eyebrow,
+  PageLoader,
   PageShell,
   Sparkle,
   Spinner,
@@ -16,9 +15,11 @@ import {
 } from "../../../../components/ui";
 import { useRequireAuth } from "../../../../hooks/useRequireAuth";
 import {
+  useLegacyHeader,
   useLegacySessions,
   useLegacyTurns,
   useSendTurn,
+  useStartSession,
   useWrapSession,
 } from "../../../../lib/queries";
 
@@ -32,6 +33,21 @@ type DisplayTurn =
       pending?: boolean;
     };
 
+function relativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const ts = new Date(iso).getTime();
+  if (Number.isNaN(ts)) return "";
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return `${Math.floor(day / 30)}mo ago`;
+}
+
 export default function ConversationPage({
   params,
 }: {
@@ -41,15 +57,20 @@ export default function ConversationPage({
   const auth = useRequireAuth();
   const router = useRouter();
 
+  const headerQ = useLegacyHeader(personId);
   const sessionsQ = useLegacySessions(personId, 50);
   const turnsQ = useLegacyTurns(personId, sessionId);
   const sendTurn = useSendTurn(personId, sessionId);
   const wrapSession = useWrapSession(personId, sessionId);
+  const startSession = useStartSession(personId);
 
   const session = useMemo(
     () => sessionsQ.data?.find((s) => s.sessionId === sessionId) ?? null,
     [sessionsQ.data, sessionId]
   );
+
+  const personName = headerQ.data?.name ?? "";
+  const firstName = personName.split(/\s+/)[0] || personName;
 
   const [draft, setDraft] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
@@ -71,12 +92,9 @@ export default function ConversationPage({
     const onKey = (e: KeyboardEvent) => {
       const ta = textareaRef.current;
       if (!ta) return;
-      // Don't interfere with modifier shortcuts.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Don't override if user is already in a form control.
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
-      // Only trigger on printable single characters.
       if (e.key.length !== 1) return;
       ta.focus({ preventScroll: true });
     };
@@ -84,13 +102,15 @@ export default function ConversationPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [session?.status]);
 
-  // When a new turn arrives, scroll the latest message into view.
+  // When a new turn arrives, scroll the latest message to the END (just above
+  // the fixed composer) — not "center", which previously yanked the page
+  // around and made the composer feel out of reach.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const lastChild = el.lastElementChild as HTMLElement | null;
     if (lastChild) {
-      lastChild.scrollIntoView({ behavior: "smooth", block: "center" });
+      lastChild.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [turnsQ.data, pendingUserMessage]);
 
@@ -132,12 +152,26 @@ export default function ConversationPage({
     }
   };
 
+  const handleStartNew = async () => {
+    setLocalError(null);
+    try {
+      const res = await startSession.mutateAsync();
+      router.push(
+        `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
+          res.sessionId
+        )}`
+      );
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Could not start a new conversation."
+      );
+    }
+  };
+
   if (auth.status !== "authenticated") {
     return (
-      <PageShell narrow>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+      <PageShell>
+        <PageLoader label="Loading conversation" />
       </PageShell>
     );
   }
@@ -168,170 +202,312 @@ export default function ConversationPage({
     });
   }
 
+  const isOpen = session?.status === "open";
+  const isWrapped = session?.status === "wrapped";
+
   return (
-    <PageShell narrow>
-      {/* Sticky header chrome — back arrow, page label, title + Close conversation.
-          Stays pinned at the top of the viewport while the page scrolls. */}
-      <div
-        className="sticky top-0 z-30 -mx-4 px-4 pt-4 sm:-mx-6 sm:px-6 sm:pt-6 md:-mx-8 md:px-8 md:pt-10"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(8, 7, 20, 0.97) 0%, rgba(8, 7, 20, 0.92) 80%, rgba(8, 7, 20, 0) 100%)",
-        }}
-      >
-        <AppHeader
-          back={`/legacies/${encodeURIComponent(personId)}`}
-          title="Conversation"
-        />
-        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 label-mono text-meta text-tertiary">
-              <span
-                className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-                  session?.status === "open"
-                    ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]"
-                    : "bg-white/40"
-                }`}
-              >
-                {session?.status === "open" && (
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300/40" />
-                )}
-              </span>
+    <PageShell>
+      <AppHeader
+        back={`/legacies/${encodeURIComponent(personId)}`}
+        title={firstName ? `with ${firstName}` : "Conversation"}
+      />
+
+      {/* Editorial intro — readout strip + display headline, no Card wrapper */}
+      <section className="mb-8 sm:mb-10">
+        <div className="flex items-center gap-3 label-mono text-meta text-secondary">
+          <span
+            className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+              isOpen
+                ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]"
+                : isWrapped
+                  ? "bg-[rgb(var(--warm))] shadow-[0_0_10px_rgba(240,200,154,0.7)]"
+                  : "bg-white/40"
+            }`}
+          >
+            {isOpen && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300/40" />
+            )}
+          </span>
+          <span>
+            {isWrapped
+              ? "Archived"
+              : isOpen
+                ? "Live · in progress"
+                : "Loading"}
+          </span>
+          {session && (
+            <>
+              <span className="text-white/30">/</span>
               <span>
-                {session?.status === "wrapped"
-                  ? "Archived"
-                  : session?.status === "open"
-                    ? "Live · in progress"
-                    : "Loading"}
+                {session.turnCount} turn{session.turnCount === 1 ? "" : "s"}
               </span>
-            </div>
-            <h1 className="display-sans text-headline mt-2 text-white">
-              {session?.status === "wrapped" ? "Looking back" : "Tell me more"}
-            </h1>
-          </div>
-          {session?.status === "open" && (
-            <div className="shrink-0">
-              <Button
-                variant="secondary"
-                onClick={() => void handleWrap()}
-                disabled={wrapSession.isPending}
-              >
-                {wrapSession.isPending && <Spinner />}
-                {wrapSession.isPending ? "Closing…" : "Close conversation"}
-              </Button>
-            </div>
+              {session.openedAt && (
+                <>
+                  <span className="text-white/30">/</span>
+                  <span>opened {relativeTime(session.openedAt)}</span>
+                </>
+              )}
+            </>
           )}
+        </div>
+        <h1 className="display-sans text-display mt-5 leading-[0.92] text-white">
+          {isWrapped ? (
+            <>
+              LOOKING
+              <br />
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, rgba(var(--warm),1) 0%, rgba(var(--warm-deep),1) 100%)",
+                }}
+              >
+                BACK.
+              </span>
+            </>
+          ) : (
+            <>
+              TELL ME
+              <br />
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, rgba(var(--accent-soft),1) 0%, rgba(var(--accent),1) 100%)",
+                }}
+              >
+                MORE.
+              </span>
+            </>
+          )}
+        </h1>
+      </section>
+
+      {error && (
+        <div className="mb-6">
+          <ErrorBanner>{error}</ErrorBanner>
+        </div>
+      )}
+
+      {/* Two-column editorial split on lg+ — metadata on the left rail,
+          conversation thread on the right. Mobile stacks them. */}
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-14">
+        <aside className="lg:col-span-4">
+          <div className="lg:sticky lg:top-6 space-y-7">
+            {isWrapped && session?.sessionSummary && (
+              <div>
+                <p className="eyebrow">Summary</p>
+                <div className="mt-3 border-l-2 border-[rgb(var(--warm))]/55 pl-4">
+                  <p className="serif text-title italic leading-relaxed text-primary">
+                    {session.sessionSummary}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {personName && (
+                <div>
+                  <p className="eyebrow">Speaking with</p>
+                  <p className="mt-2 display-sans text-title text-white">
+                    {personName}
+                  </p>
+                </div>
+              )}
+
+              {session?.lastTurnAt && (
+                <div>
+                  <p className="eyebrow">Last reply</p>
+                  <p className="mt-2 text-body text-secondary">
+                    {relativeTime(session.lastTurnAt)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {isOpen && (
+              <div className="border-t border-white/20 pt-6">
+                <Button
+                  variant="secondary"
+                  onClick={() => void handleWrap()}
+                  disabled={wrapSession.isPending}
+                  className="w-full justify-center"
+                >
+                  {wrapSession.isPending && <Spinner />}
+                  {wrapSession.isPending ? "Closing…" : "Close conversation"}
+                </Button>
+                <p className="mt-3 text-caption text-tertiary">
+                  Closing seals the session and writes a summary you can revisit later.
+                </p>
+              </div>
+            )}
+
+            {isWrapped && (
+              <div className="space-y-3 border-t border-white/20 pt-6">
+                <p className="label-mono text-meta text-secondary">
+                  This conversation is sealed
+                </p>
+                {/* Primary action — start a new conversation with the same person */}
+                <button
+                  type="button"
+                  onClick={() => void handleStartNew()}
+                  disabled={startSession.isPending}
+                  aria-label={`Start a new conversation with ${firstName || "this person"}`}
+                  className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border-2 border-[rgb(var(--accent-soft))]/55 bg-linear-to-br from-[rgba(60,46,110,0.78)] via-[rgba(36,28,72,0.82)] to-[rgba(20,16,42,0.85)] px-5 py-4 text-left backdrop-blur-xl shadow-[0_24px_60px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)] transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/80 hover:shadow-[0_32px_80px_-20px_rgba(123,115,253,0.7),inset_0_1px_0_0_rgba(255,255,255,0.18)] disabled:cursor-wait disabled:opacity-70"
+                >
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-[rgba(200,170,255,0.6)] to-transparent"
+                  />
+                  <span
+                    aria-hidden
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/25 bg-white/12 text-white"
+                  >
+                    {startSession.isPending ? (
+                      <Spinner className="h-5 w-5" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                        <path
+                          d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6z"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M12 9v4M10 11h4"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="relative min-w-0 flex-1">
+                    <p className="text-body font-medium text-white">
+                      {startSession.isPending
+                        ? "Opening…"
+                        : `Talk to ${firstName || "them"} again`}
+                    </p>
+                    <p className="mt-0.5 text-caption text-secondary">
+                      Begin a new conversation
+                    </p>
+                  </span>
+                </button>
+
+                {/* Secondary action — back to the legacy detail page */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/legacies/${encodeURIComponent(personId)}`)
+                  }
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/22 bg-white/4 px-4 py-3 text-left text-caption text-secondary transition hover:border-white/40 hover:bg-white/8 hover:text-white"
+                >
+                  <span>Back to {firstName || "legacy"}'s page</span>
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                    <path
+                      d="M9 5l7 7-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Right: the conversation thread */}
+        <div className="lg:col-span-8">
+          <div ref={scrollerRef} className="space-y-8 sm:space-y-10">
+            {turnsQ.isLoading ? (
+              <div className="flex items-center gap-3 text-body text-secondary">
+                <Spinner /> Loading conversation
+              </div>
+            ) : display.length === 0 ? (
+              <p className="text-body text-tertiary">
+                No turns yet.
+              </p>
+            ) : (
+              display.map((item, i) =>
+                item.kind === "opener" ? (
+                  <Line key={`op-${i}`} role="assistant" text={item.text} />
+                ) : (
+                  <div key={item.turnIndex} className="space-y-6">
+                    <Line role="user" text={item.userMessage} />
+                    {item.pending ? (
+                      <Line role="assistant" text="" pending />
+                    ) : (
+                      item.assistantReply && (
+                        <Line role="assistant" text={item.assistantReply} />
+                      )
+                    )}
+                  </div>
+                )
+              )
+            )}
+          </div>
+
         </div>
       </div>
 
-      <div>
-        {error && (
-          <div className="mb-6">
-            <ErrorBanner>{error}</ErrorBanner>
-          </div>
-        )}
+      {/* Reserve vertical space so the fixed composer never sits on top of
+          the last assistant reply. Tuned to composer height + breathing room. */}
+      {isOpen && <div aria-hidden className="h-56 sm:h-60" />}
 
-        {session?.status === "wrapped" && session.sessionSummary && (
-          <Card className="mb-8 p-5">
-            <Eyebrow>Summary</Eyebrow>
-            <p className="mt-2 text-sm italic leading-relaxed text-secondary">
-              {session.sessionSummary}
-            </p>
-          </Card>
-        )}
-
-        {/* Messages flow normally in the page — page scrolls, sticky chrome stays put. */}
-        <div ref={scrollerRef} className="space-y-8 sm:space-y-10">
-          {turnsQ.isLoading ? (
-            <div className="flex items-center gap-3 label-mono text-meta text-tertiary">
-              <Spinner /> Loading conversation
-            </div>
-          ) : display.length === 0 ? (
-            <p className="label-mono text-meta text-tertiary">
-              No turns yet.
-            </p>
-          ) : (
-            display.map((item, i) =>
-              item.kind === "opener" ? (
-                <Line key={`op-${i}`} role="assistant" text={item.text} />
-              ) : (
-                <div key={item.turnIndex} className="space-y-6">
-                  <Line role="user" text={item.userMessage} />
-                  {item.pending ? (
-                    <Line role="assistant" text="" pending />
-                  ) : (
-                    item.assistantReply && (
-                      <Line role="assistant" text={item.assistantReply} />
-                    )
-                  )}
-                </div>
-              )
-            )
-          )}
-        </div>
-
-        {session?.status === "open" && (
-          <form
-            onSubmit={handleSend}
-            className="sticky bottom-24 z-20 -mx-4 mt-6 mb-4 px-4 pb-3 pt-10 backdrop-blur-2xl backdrop-saturate-150 sm:-mx-6 sm:bottom-28 sm:px-6 sm:pb-4 sm:pt-12 md:-mx-8 md:px-8"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(8, 7, 20, 0) 0%, rgba(8, 7, 20, 0.55) 22%, rgba(8, 7, 20, 0.9) 55%, rgba(8, 7, 20, 0.97) 100%)",
-            }}
-          >
+      {/* Composer — fixed to the viewport so it never unpins on short pages
+          or when scrolling reaches the bottom of its grid column. Higher than
+          the (hidden) BottomNav so there's no z-index fight. */}
+      {isOpen && (
+        <form
+          onSubmit={handleSend}
+          className="fixed inset-x-0 bottom-0 z-30 px-4 pt-10 pb-safe sm:px-6 sm:pt-12 md:px-8"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(8, 7, 20, 0) 0%, rgba(8, 7, 20, 0.7) 30%, rgba(8, 7, 20, 0.95) 70%)",
+          }}
+        >
+          <div className="mx-auto w-full max-w-3xl">
             <div
-              className="rounded-2xl border border-white/12 p-3 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] sm:rounded-3xl sm:p-4"
+              className="rounded-2xl border-2 border-white/28 p-4 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] sm:rounded-3xl"
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(14, 12, 28, 0.92) 0%, rgba(8, 7, 20, 0.95) 100%)",
+                  "linear-gradient(180deg, rgba(20, 16, 38, 0.96) 0%, rgba(10, 8, 22, 0.98) 100%)",
               }}
             >
-            <Textarea
-              ref={textareaRef}
-              rows={2}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void handleSend();
-                }
-              }}
-              placeholder="A memory. A moment. Anything."
-              disabled={sendTurn.isPending}
-              autoFocus
-              className="border-b-0 px-1 py-1 text-base placeholder:italic"
-            />
-            <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/6 pt-3">
-              <p className="hidden label-mono text-meta text-tertiary sm:block">
-                Enter to send · Shift+Enter for new line
-              </p>
-              <Button type="submit" disabled={sendTurn.isPending || !draft.trim()}>
-                {sendTurn.isPending && <Spinner />}
-                {sendTurn.isPending ? "Sending…" : "Send"}
-              </Button>
+              <Textarea
+                ref={textareaRef}
+                rows={2}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
+                placeholder="A memory. A moment. Anything."
+                disabled={sendTurn.isPending}
+                autoFocus
+                className="border-0 bg-transparent px-1 py-1 text-body shadow-none focus:bg-transparent focus:shadow-none"
+              />
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/22 pt-3">
+                <p className="hidden text-caption text-secondary sm:block">
+                  Enter to send · Shift+Enter for a new line
+                </p>
+                <Button
+                  type="submit"
+                  disabled={sendTurn.isPending || !draft.trim()}
+                >
+                  {sendTurn.isPending && <Spinner />}
+                  {sendTurn.isPending ? "Sending…" : "Send"}
+                </Button>
+              </div>
             </div>
-            </div>
-          </form>
-        )}
-
-        {session?.status === "wrapped" && (
-          <div className="mt-8 text-center">
-            <p className="label-mono text-meta text-tertiary">
-              This conversation is sealed.
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                router.push(`/legacies/${encodeURIComponent(personId)}`)
-              }
-              className="mt-4 label-mono text-meta text-secondary hover:text-white"
-            >
-              Return to legacy →
-            </button>
           </div>
-        )}
-      </div>
+        </form>
+      )}
     </PageShell>
   );
 }
@@ -347,16 +523,16 @@ function Line({
 }) {
   if (role === "assistant") {
     return (
-      <div className="relative pl-6 sm:pl-7">
-        <span className="absolute left-0 top-1 text-[rgb(var(--accent-soft))] drop-shadow-[0_0_12px_rgba(180,173,255,0.7)]">
-          <Sparkle size={16} />
+      <div className="relative pl-6 sm:pl-8">
+        <span className="absolute left-0 top-1.5 text-[rgb(var(--accent-soft))] drop-shadow-[0_0_12px_rgba(180,173,255,0.7)]">
+          <Sparkle size={18} />
         </span>
         {pending ? (
-          <span className="inline-flex items-center gap-3 label-mono text-meta text-secondary">
+          <span className="inline-flex items-center gap-3 text-body text-secondary">
             <BreathDots /> Listening
           </span>
         ) : (
-          <p className="serif whitespace-pre-wrap text-lg leading-relaxed text-primary sm:text-xl">
+          <p className="serif whitespace-pre-wrap text-headline leading-relaxed text-primary">
             {text}
           </p>
         )}
@@ -365,7 +541,7 @@ function Line({
   }
   return (
     <div className="relative pl-5 sm:pl-6">
-      <span className="absolute left-0 top-2.5 inline-block h-3 w-px bg-white/30" />
+      <span className="absolute left-0 top-2 inline-block h-5 w-[3px] rounded-full bg-[rgb(var(--accent-soft))]/65" />
       <p className="text-body whitespace-pre-wrap text-secondary">{text}</p>
     </div>
   );

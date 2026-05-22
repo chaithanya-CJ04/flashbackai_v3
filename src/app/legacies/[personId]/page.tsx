@@ -1,14 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  use,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "../../components/AppHeader";
 import { Avatar } from "../../components/Avatar";
@@ -19,12 +12,15 @@ import {
   Card,
   Chip,
   EmptyState,
+  EntityMedia,
   ErrorBanner,
   Eyebrow,
   Input,
+  PageLoader,
   PageShell,
   RowLink,
   Spinner,
+  ThemeIcon,
 } from "../../components/ui";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import {
@@ -46,7 +42,7 @@ import {
   useTraits,
   useUpsertProfileFact,
 } from "../../lib/queries";
-import { legacyApi, type ProfileFact, type Theme } from "../../lib/api";
+import type { ProfileFact, Theme } from "../../lib/api";
 
 // ---------- Tab IDs preserved under the Workshop drawer ----------
 
@@ -107,9 +103,7 @@ export default function LegacyDetailPage({
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader label="Opening" />
       </PageShell>
     );
   }
@@ -131,9 +125,7 @@ export default function LegacyDetailPage({
       )}
 
       {!header ? (
-        <div className="flex items-center gap-3 label-mono text-meta text-tertiary">
-          <Spinner /> Loading
-        </div>
+        <PageLoader label="Loading" />
       ) : (
         <div className="pb-32">
           {/* Section 1/5 — Profile (PRD §6 row 1).
@@ -149,11 +141,14 @@ export default function LegacyDetailPage({
             profileSummary={header.profileSummary}
           />
 
-          {/* Section 2/5 — Action Items (Biopic, Story Books, Comic Strips,
-              Mentor Mode). DEFERRED: requires backend endpoints for
-              generation + a numeric level for unlock gating. The PRD calls
-              for lock icons + "unlocks at L*N*" hints; we'll re-add this row
-              when those endpoints land. */}
+          {/* Section 2/5 — Primary action: start or continue talking.
+              Previously hidden behind a low-contrast bottom chat-bar that
+              overlapped the BottomNav and was unusable for older users.
+              Replaced with a big, obvious CTA card. */}
+          <ConversationCTA
+            personId={personId}
+            personName={header.name}
+          />
 
           {/* Section 3/5 — Badges strip (PRD §8). */}
           <BadgesSection
@@ -178,9 +173,6 @@ export default function LegacyDetailPage({
           <WorkshopSection personId={personId} headerFacts={header.profileFacts ?? []} />
         </div>
       )}
-
-      {/* Bottom — Persistent chat input (PRD §6 row 5, §7). */}
-      {header && <ChatBar personId={personId} personName={header.name} />}
     </PageShell>
   );
 }
@@ -231,15 +223,184 @@ function ProfileSection({
         <div className="label-mono text-meta text-tertiary">
           {relationship}
         </div>
-        <p className="display-sans mt-1.5 truncate text-[clamp(1.65rem,1.1rem+2.4vw,2.6rem)] leading-[1.02] text-white">
+        <p className="display-sans text-headline mt-1.5 truncate leading-[1.05] text-white">
           {name}
         </p>
         {profileSummary && (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-secondary">
+          <p className="text-caption mt-1.5 line-clamp-2 leading-relaxed text-secondary">
             {profileSummary}
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+// ---------- Section 2: Conversation CTA ----------
+
+/** Big, obvious "Talk to {name}" card sitting right under the profile.
+ *  The primary action of this screen for the target audience (memory care,
+ *  older users) — never hidden behind an input bar or workshop drawer. */
+function ConversationCTA({
+  personId,
+  personName,
+}: {
+  personId: string;
+  personName: string;
+}) {
+  const router = useRouter();
+  const sessionsQ = useLegacySessions(personId);
+  const startSession = useStartSession(personId);
+  const [error, setError] = useState<string | null>(null);
+
+  const sessions = sessionsQ.data ?? [];
+  const openSession = sessions.find((s) => s.status === "open");
+  const sorted = [...sessions].sort((a, b) => {
+    const at = new Date(a.lastTurnAt || a.openedAt).getTime();
+    const bt = new Date(b.lastTurnAt || b.openedAt).getTime();
+    return bt - at;
+  });
+  const lastSession = sorted[0];
+  const totalCount = sessions.length;
+  const firstName = personName.split(/\s+/)[0] || personName;
+
+  const isContinuing = !!openSession;
+  const hasPast = !openSession && totalCount > 0;
+
+  const label = isContinuing
+    ? `Continue talking to ${firstName}`
+    : hasPast
+      ? `Talk to ${firstName} again`
+      : `Begin talking to ${firstName}`;
+
+  const subtitle = isContinuing
+    ? `Conversation in progress${
+        openSession.lastTurnAt
+          ? ` · last reply ${relativeTime(openSession.lastTurnAt)}`
+          : ""
+      }`
+    : hasPast
+      ? `${totalCount} conversation${totalCount === 1 ? "" : "s"} so far · last ${relativeTime(lastSession.lastTurnAt || lastSession.openedAt)}`
+      : "This will be your first chat together.";
+
+  const handleClick = async () => {
+    setError(null);
+    try {
+      if (openSession) {
+        router.push(
+          `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
+            openSession.sessionId
+          )}`
+        );
+        return;
+      }
+      const res = await startSession.mutateAsync();
+      router.push(
+        `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
+          res.sessionId
+        )}`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open the conversation.");
+    }
+  };
+
+  const pending = startSession.isPending;
+
+  return (
+    <section className="mb-8">
+      {error && (
+        <div className="mb-3">
+          <ErrorBanner>{error}</ErrorBanner>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => void handleClick()}
+        disabled={pending || sessionsQ.isLoading}
+        aria-label={label}
+        className="group relative flex w-full items-center gap-4 overflow-hidden rounded-3xl border-2 border-[rgb(var(--accent-soft))]/55 bg-linear-to-br from-[rgba(60,46,110,0.78)] via-[rgba(36,28,72,0.82)] to-[rgba(20,16,42,0.85)] p-5 text-left backdrop-blur-xl shadow-[0_30px_80px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)] transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/80 hover:shadow-[0_40px_100px_-20px_rgba(123,115,253,0.7),inset_0_1px_0_0_rgba(255,255,255,0.18)] disabled:cursor-wait disabled:opacity-70 sm:gap-5 sm:p-6"
+      >
+        {/* Top sheen */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-[rgba(200,170,255,0.6)] to-transparent"
+        />
+        {/* Radial glow that brightens on hover */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_50%,rgba(180,173,255,0.22)_0%,transparent_60%)] opacity-80 transition group-hover:opacity-100"
+        />
+
+        {/* Speech-bubble icon — universally legible */}
+        <span
+          aria-hidden
+          className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/25 bg-white/12 text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] sm:h-16 sm:w-16"
+        >
+          {pending ? (
+            <Spinner className="h-5 w-5" />
+          ) : isContinuing ? (
+            // Pulsing dot — live conversation
+            <span className="relative inline-flex">
+              <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
+                <path
+                  d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6z"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinejoin="round"
+                />
+                <circle cx="9" cy="10" r="1" fill="currentColor" />
+                <circle cx="13" cy="10" r="1" fill="currentColor" />
+                <circle cx="17" cy="10" r="1" fill="currentColor" />
+              </svg>
+              <span
+                aria-hidden
+                className="absolute -right-1 -top-1 inline-flex h-3 w-3"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
+                <span className="relative inline-flex h-3 w-3 rounded-full border border-emerald-200 bg-emerald-400" />
+              </span>
+            </span>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
+              <path
+                d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6z"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M8 10h8M8 13h5"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </span>
+
+        <div className="relative min-w-0 flex-1">
+          <p className="display-sans text-title leading-tight text-white">
+            {label}
+          </p>
+          <p className="text-body mt-1.5 text-secondary">{subtitle}</p>
+        </div>
+
+        <span
+          aria-hidden
+          className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/30 bg-white/8 text-white transition group-hover:border-white/55 group-hover:bg-white/16 sm:h-12 sm:w-12"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+            <path
+              d="M9 5l7 7-7 7"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
     </section>
   );
 }
@@ -375,14 +536,17 @@ function BadgesSection({
               <div className="relative flex items-center gap-2.5">
                 <span
                   aria-hidden
-                  className={`grid h-9 w-9 place-items-center rounded-full border ${vis.ring}`}
+                  className={`grid h-9 w-9 place-items-center rounded-full border ${vis.ring} ${locked ? "opacity-75" : ""}`}
                 >
-                  <span className={`label-mono text-meta ${vis.label}`}>
-                    {(t.tier ?? "·").slice(0, 1).toUpperCase()}
-                  </span>
+                  <ThemeIcon
+                    slug={t.slug}
+                    name={t.displayName}
+                    size={18}
+                    className={vis.label}
+                  />
                 </span>
                 <div className="min-w-0">
-                  <p className="max-w-40 truncate text-xs text-primary">
+                  <p className={`max-w-40 truncate text-caption ${locked ? "text-secondary" : "text-primary"}`}>
                     {t.displayName}
                   </p>
                   <p className="mt-0.5 label-mono text-meta text-tertiary">
@@ -541,7 +705,7 @@ function GallerySection({
                               {m.title}
                             </p>
                           )}
-                          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-secondary">
+                          <p className="mt-1.5 line-clamp-2 text-caption leading-relaxed text-secondary">
                             {m.narrative}
                           </p>
                           {m.createdAt && (
@@ -576,181 +740,15 @@ function GallerySection({
   );
 }
 
-// ---------- Bottom: Persistent chat input ----------
+// ---------- Workshop: preserved tab data, expanded by default ----------
+//
+// We persist the user's collapse choice in localStorage so anyone who
+// deliberately hides it stays hidden across navigations. Default state for
+// fresh sessions / first visits is OPEN — the tab data (Conversations,
+// Entities, Threads, …) is core to the experience and shouldn't sit behind
+// a click.
 
-type LocalTurn = { id: string; from: "user" | "assistant"; text: string };
-
-function ChatBar({
-  personId,
-  personName,
-}: {
-  personId: string;
-  personName: string;
-}) {
-  const router = useRouter();
-  const sessionsQ = useLegacySessions(personId);
-  const startSession = useStartSession(personId);
-
-  // Pinned session for this visit. Prefer an existing open session; otherwise
-  // start one on first send. Once set, route every turn through it.
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  useEffect(() => {
-    if (sessionId) return;
-    const open = sessionsQ.data?.find((s) => s.status === "open");
-    if (open) setSessionId(open.sessionId);
-  }, [sessionsQ.data, sessionId]);
-
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [turns, setTurns] = useState<LocalTurn[]>([]);
-  const [showTranscript, setShowTranscript] = useState(false);
-
-  const transcriptRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (showTranscript && transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-    }
-  }, [turns, showTranscript]);
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || sending) return;
-    setError(null);
-    setSending(true);
-
-    const userId = `u-${Date.now()}`;
-    setTurns((prev) => [...prev, { id: userId, from: "user", text }]);
-    setDraft("");
-    setShowTranscript(true);
-
-    try {
-      let sid = sessionId;
-      if (!sid) {
-        const res = await startSession.mutateAsync();
-        sid = res.sessionId;
-        setSessionId(sid);
-        if (res.opener) {
-          setTurns((prev) => [
-            { id: `a-opener-${sid}`, from: "assistant", text: res.opener },
-            ...prev,
-          ]);
-        }
-      }
-      const reply = await legacyApi.sendTurn(personId, sid, text);
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: `a-${reply.turn.turnIndex}`,
-          from: "assistant",
-          text: reply.reply,
-        },
-      ]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const openFullConversation = () => {
-    if (!sessionId) return;
-    router.push(
-      `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
-        sessionId
-      )}`
-    );
-  };
-
-  return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:px-6 sm:pb-6">
-      <div className="pointer-events-auto w-full max-w-3xl">
-        {showTranscript && turns.length > 0 && (
-          <div
-            ref={transcriptRef}
-            className="mb-2 max-h-[40vh] overflow-y-auto rounded-2xl border border-white/8 bg-black/70 p-3 backdrop-blur-md sm:p-4"
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="label-mono text-meta text-tertiary">
-                Live · {turns.length} turn{turns.length === 1 ? "" : "s"}
-              </span>
-              <div className="flex gap-3">
-                {sessionId && (
-                  <button
-                    className="label-mono text-meta text-tertiary hover:text-white"
-                    onClick={openFullConversation}
-                  >
-                    Open full →
-                  </button>
-                )}
-                <button
-                  className="label-mono text-meta text-tertiary hover:text-white"
-                  onClick={() => setShowTranscript(false)}
-                >
-                  Hide
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {turns.map((t) => (
-                <div
-                  key={t.id}
-                  className={`text-sm leading-relaxed ${
-                    t.from === "user" ? "text-primary" : "text-secondary"
-                  }`}
-                >
-                  <span className="mr-2 label-mono text-meta text-tertiary">
-                    {t.from === "user" ? "you" : personName.split(" ")[0]}
-                  </span>
-                  {t.text}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-2">
-            <ErrorBanner>{error}</ErrorBanner>
-          </div>
-        )}
-
-        <form
-          onSubmit={onSubmit}
-          className="flex items-center gap-2 rounded-full border border-white/12 bg-black/70 p-1.5 pl-4 backdrop-blur-md shadow-[0_18px_42px_rgba(0,0,0,0.45)]"
-        >
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`Tell us about ${personName.split(" ")[0]}…`}
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/35 focus:outline-none"
-            autoComplete="off"
-          />
-          {turns.length > 0 && !showTranscript && (
-            <button
-              type="button"
-              onClick={() => setShowTranscript(true)}
-              className="rounded-full px-2 label-mono text-meta text-secondary hover:text-white"
-            >
-              Show
-            </button>
-          )}
-          <Button
-            type="submit"
-            disabled={sending || !draft.trim()}
-            className="rounded-full px-4 py-2"
-          >
-            {sending ? <Spinner /> : "Send"}
-          </Button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ---------- Workshop: preserved tab data, collapsed by default ----------
+const WORKSHOP_KEY = "flashback:workshop-open";
 
 function WorkshopSection({
   personId,
@@ -759,7 +757,26 @@ function WorkshopSection({
   personId: string;
   headerFacts: ProfileFact[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
+  // Rehydrate the user's prior choice on mount — only flips to closed if
+  // they previously hid it. Avoids SSR hydration mismatch by reading after
+  // first paint.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(WORKSHOP_KEY);
+      if (stored === "0") setOpen(false);
+    } catch {}
+  }, []);
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(WORKSHOP_KEY, next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
   const [tab, setTab] = useState<TabId>("sessions");
   const router = useRouter();
   const startSession = useStartSession(personId);
@@ -780,30 +797,76 @@ function WorkshopSection({
   return (
     <section className="mt-4">
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl border border-white/12 bg-[rgba(18,15,34,0.62)] p-4 text-left backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color] duration-300 hover:border-[rgb(var(--accent-soft))]/45 hover:bg-[rgba(28,22,52,0.7)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+        onClick={toggle}
+        aria-expanded={open}
+        className={`group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border p-4 text-left backdrop-blur-xl transition-[border-color,box-shadow,background-color] duration-300 active:scale-[0.995] active:duration-75 ${
+          open
+            ? // Highlighted (open) — accent-violet border, brand bloom, brighter inset
+              "border-[rgb(var(--accent-soft))]/55 bg-[rgba(36,28,68,0.78)] shadow-[0_30px_60px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)] hover:bg-[rgba(42,32,80,0.85)]"
+            : // Collapsed — quieter dark glass, same surface as RowLink
+              "border-white/12 bg-[rgba(18,15,34,0.62)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-[rgb(var(--accent-soft))]/45 hover:bg-[rgba(28,22,52,0.7)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+        }`}
       >
+        {/* Violet radial wash — always present when open, fades in on hover when closed */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+          className={`pointer-events-none absolute inset-0 transition-opacity duration-500 ${
+            open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
         >
-          <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_50%,rgba(123,115,253,0.22)_0%,transparent_60%)]" />
+          <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_50%,rgba(123,115,253,0.28)_0%,transparent_60%)]" />
         </span>
+        {/* Top sheen — brighter when open */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/25 to-transparent transition group-hover:via-[rgba(200,170,255,0.6)]"
+          className={`pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent transition ${
+            open ? "via-[rgba(200,170,255,0.7)]" : "via-white/25 group-hover:via-[rgba(200,170,255,0.6)]"
+          } to-transparent`}
         />
-        <span className="relative">
-          <span className="label-mono text-meta text-secondary">
-            Workshop
-          </span>
-          <p className="mt-1 text-sm text-secondary">
-            Conversations, entities, threads, facts, questions, traits, merges.
-          </p>
-        </span>
+        {/* Left accent bar — visible when open, signals "active section" */}
         <span
           aria-hidden
-          className="relative label-mono text-meta text-tertiary"
+          className={`pointer-events-none absolute left-0 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent transition ${
+            open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        />
+
+        <span className="relative flex min-w-0 items-center gap-3">
+          {/* Pulsing live dot — brand "this is the active workspace" signifier */}
+          <span
+            aria-hidden
+            className={`relative inline-flex h-1.5 w-1.5 shrink-0 ${open ? "" : "opacity-60"}`}
+          >
+            {open && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[rgb(var(--accent-soft))]/50" />
+            )}
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.9)]" />
+          </span>
+          <span className="min-w-0">
+            <span
+              className={`label-mono text-meta ${
+                open ? "text-white" : "text-secondary"
+              }`}
+            >
+              Workshop
+            </span>
+            <p
+              className={`mt-1 text-caption ${
+                open ? "text-primary" : "text-secondary"
+              }`}
+            >
+              Conversations, entities, threads, facts, questions, traits, merges.
+            </p>
+          </span>
+        </span>
+
+        <span
+          aria-hidden
+          className={`relative shrink-0 rounded-full border px-2.5 py-1 label-mono text-meta transition ${
+            open
+              ? "border-[rgb(var(--accent-soft))]/55 bg-[rgb(var(--accent))]/25 text-white"
+              : "border-white/20 bg-white/4 text-tertiary group-hover:text-white"
+          }`}
         >
           {open ? "hide" : "show"}
         </span>
@@ -866,7 +929,7 @@ function SectionHeading({
     <div className="mb-3 flex items-end justify-between gap-3">
       <div>
         <h2 className="display-sans text-headline text-white">{title}</h2>
-        {hint && <p className="mt-1 text-xs text-tertiary">{hint}</p>}
+        {hint && <p className="mt-1 text-caption text-tertiary">{hint}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -886,7 +949,7 @@ function TabHeader({
     <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div>
         <h2 className="display-sans text-headline text-white">{title}</h2>
-        {subtitle && <p className="mt-1 text-xs text-tertiary">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-caption text-tertiary">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -961,11 +1024,11 @@ function SessionsTab({
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="line-clamp-2 text-base leading-relaxed text-primary">
+                <p className="line-clamp-2 text-body leading-relaxed text-primary">
                   {s.opener || "(no opener)"}
                 </p>
                 {s.sessionSummary && (
-                  <p className="mt-2 line-clamp-2 text-xs italic text-tertiary">
+                  <p className="mt-2 line-clamp-2 text-caption italic text-tertiary">
                     {s.sessionSummary}
                   </p>
                 )}
@@ -1031,17 +1094,24 @@ function EntitiesTab({ personId }: { personId: string }) {
               href={`/legacies/${encodeURIComponent(
                 personId
               )}/entities/${encodeURIComponent(e.id)}`}
-              className="p-5"
+              className="p-4 sm:p-5"
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="display-sans text-title text-white">{e.name}</p>
-                <span className="shrink-0 label-mono text-meta text-tertiary">
-                  {e.kind}
-                </span>
+              <div className="flex items-start gap-3 sm:gap-4">
+                <EntityMedia entity={e} size={64} rounded="rounded-xl" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="display-sans text-title truncate text-white">
+                      {e.name}
+                    </p>
+                    <span className="shrink-0 label-mono text-meta text-tertiary">
+                      {e.kind}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-caption leading-relaxed text-secondary">
+                    {e.description}
+                  </p>
+                </div>
               </div>
-              <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-secondary">
-                {e.description}
-              </p>
             </RowLink>
           ))}
         </div>
@@ -1077,7 +1147,7 @@ function ThreadsTab({ personId }: { personId: string }) {
           >
             <p className="display-sans text-title text-white">{t.title}</p>
             {t.summary && (
-              <p className="mt-1.5 text-sm leading-relaxed text-secondary">
+              <p className="mt-1.5 text-caption leading-relaxed text-secondary">
                 {t.summary}
               </p>
             )}
@@ -1195,10 +1265,10 @@ function FactsTab({
                   {f.factKey.replace(/_/g, " ")}
                 </dt>
                 <dd>
-                  <p className="text-base leading-relaxed text-primary">
+                  <p className="text-body leading-relaxed text-primary">
                     {f.answerText}
                   </p>
-                  <p className="mt-1 text-xs italic text-tertiary">
+                  <p className="mt-1 text-caption italic text-tertiary">
                     {f.questionText}
                   </p>
                 </dd>
@@ -1265,7 +1335,7 @@ function TraitsTab({ personId }: { personId: string }) {
             <p className="display-sans text-headline capitalize text-white">
               {t.trait}
             </p>
-            <p className="mt-2 text-sm italic leading-relaxed text-secondary">
+            <p className="mt-2 text-caption italic leading-relaxed text-secondary">
               {t.evidence}
             </p>
           </Card>
@@ -1330,7 +1400,7 @@ function MergesTab({ personId }: { personId: string }) {
                 <span className="mx-3 text-tertiary">→</span>
                 {m.target_entity_name}
               </p>
-              <p className="mt-2 text-sm italic text-secondary">{m.reason}</p>
+              <p className="mt-2 text-caption italic text-secondary">{m.reason}</p>
               <div className="mt-4 flex justify-end gap-2">
                 <Button
                   variant="secondary"

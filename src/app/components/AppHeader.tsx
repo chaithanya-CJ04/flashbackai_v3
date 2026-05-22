@@ -23,7 +23,7 @@ export function AppHeader({
   const showBack = back !== false && back !== undefined;
 
   return (
-    <header className="mb-6 flex h-10 items-center justify-between gap-3 sm:mb-8">
+    <header className="mb-6 flex h-12 items-center justify-between gap-3 sm:mb-8">
       <div className="flex w-12 items-center justify-start">
         {showBack && (
           <button
@@ -33,9 +33,9 @@ export function AppHeader({
               else if (typeof back === "string") router.push(back);
             }}
             aria-label="Back"
-            className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/3 text-secondary transition hover:border-white/25 hover:text-white"
+            className="grid h-11 w-11 place-items-center rounded-full border border-white/28 bg-white/8 text-primary transition active:scale-[0.94] active:duration-75 active:bg-white/22 hover:border-white/45 hover:bg-white/14 hover:text-white"
           >
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
               <path
                 d="M15 5l-7 7 7 7"
                 stroke="currentColor"

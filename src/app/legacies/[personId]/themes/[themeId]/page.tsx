@@ -13,7 +13,9 @@ import {
   EmptyState,
   ErrorBanner,
   PageShell,
+  PageLoader,
   Spinner,
+  ThemeIcon,
 } from "../../../../components/ui";
 import { useRequireAuth } from "../../../../hooks/useRequireAuth";
 import {
@@ -121,9 +123,7 @@ export default function ThemeDetailPage({
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader />
       </PageShell>
     );
   }
@@ -153,10 +153,22 @@ export default function ThemeDetailPage({
       ) : (
         <div className="space-y-6">
           <Card className="p-5">
-            <div className="flex items-baseline justify-between gap-3">
-              <h1 className="text-lg font-semibold text-primary">
-                {theme.displayName}
-              </h1>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${
+                    theme.state === "unlocked"
+                      ? "border-[rgb(var(--accent-soft))]/50 bg-[rgb(var(--accent))]/15 text-[rgb(var(--accent-soft))]"
+                      : "border-white/18 bg-white/4 text-tertiary"
+                  }`}
+                >
+                  <ThemeIcon slug={theme.slug} name={theme.displayName} size={20} />
+                </span>
+                <h1 className="truncate text-lg font-semibold text-primary">
+                  {theme.displayName}
+                </h1>
+              </div>
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
                   theme.state === "unlocked"

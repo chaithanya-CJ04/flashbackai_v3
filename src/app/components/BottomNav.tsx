@@ -12,7 +12,7 @@ type NavItem = {
 
 function HomeIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px]">
       <path
         d="M3.5 10.5L12 4l8.5 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-6v6H4.5a1 1 0 0 1-1-1v-9.5z"
         stroke="currentColor"
@@ -25,7 +25,7 @@ function HomeIcon() {
 
 function ExploreIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px]">
       <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M20 20l-3.5-3.5"
@@ -68,7 +68,7 @@ function PlusIcon() {
 
 function BellIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px]">
       <path
         d="M6 9a6 6 0 0 1 12 0v3l1.5 3h-15L6 12V9z"
         stroke="currentColor"
@@ -87,7 +87,7 @@ function BellIcon() {
 
 function UserIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+    <svg viewBox="0 0 24 24" fill="none" className="h-[22px] w-[22px]">
       <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M5 20c1.5-3 4-4.5 7-4.5s5.5 1.5 7 4.5"
@@ -115,6 +115,11 @@ export function BottomNav() {
   if (pathname === "/login" || pathname === "/auth" || pathname === "/") {
     return null;
   }
+  // Hide on conversation pages — focused chat flow with its own back/close
+  // actions. Avoids fighting the fixed composer at the bottom of the screen.
+  if (/^\/legacies\/[^/]+\/sessions\/[^/]+/.test(pathname)) {
+    return null;
+  }
 
   return (
     <nav
@@ -122,10 +127,10 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-3 z-30 flex justify-center px-3 pb-safe sm:bottom-5"
     >
       <div
-        className="flex w-full max-w-md items-center justify-around gap-1 rounded-full border border-white/12 px-2 py-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-2xl backdrop-saturate-150"
+        className="flex w-full max-w-md items-center justify-around gap-1 rounded-full border border-white/28 px-2 py-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.10)] backdrop-blur-2xl backdrop-saturate-150"
         style={{
           background:
-            "linear-gradient(180deg, rgba(14, 12, 28, 0.88) 0%, rgba(8, 7, 20, 0.92) 100%)",
+            "linear-gradient(180deg, rgba(14, 12, 28, 0.94) 0%, rgba(8, 7, 20, 0.96) 100%)",
         }}
       >
         {NAV.map((item) => {
@@ -140,7 +145,7 @@ export function BottomNav() {
                 key={item.href}
                 onClick={() => router.push(item.href)}
                 aria-label={item.label}
-                className="cta-pill px-4 py-2 text-xs"
+                className="cta-pill text-caption px-4 py-2"
               >
                 <span className="inline-flex items-center gap-1.5">
                   {item.icon}
@@ -154,12 +159,23 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               aria-label={item.label}
-              className={`flex flex-1 flex-col items-center gap-0.5 rounded-full px-2 py-1.5 transition ${
-                active ? "text-white" : "text-tertiary hover:text-white/80"
+              aria-current={active ? "page" : undefined}
+              className={`relative flex flex-1 flex-col items-center gap-1 rounded-full px-2 py-2 transition active:scale-[0.94] active:duration-75 ${
+                active
+                  ? "bg-white/10 text-white"
+                  : "text-secondary hover:bg-white/5 hover:text-white active:bg-white/8"
               }`}
             >
+              {/* Active indicator — a small violet dot below the label so the
+                  user always knows where they are even without text contrast. */}
+              {active && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -top-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_8px_rgba(180,173,255,0.9)]"
+                />
+              )}
               {item.icon}
-              <span className="label-mono text-meta">
+              <span className="label-mono text-meta font-medium">
                 {item.label}
               </span>
             </Link>

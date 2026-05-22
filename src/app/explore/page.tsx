@@ -12,6 +12,7 @@ import TiltedCard from "../components/TiltedCard";
 import {
   EmptyState,
   ErrorBanner,
+  PageLoader,
   PageShell,
   ScreenIntro,
   Spinner,
@@ -90,9 +91,7 @@ export default function ExplorePage() {
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader label="Opening explore" />
       </PageShell>
     );
   }

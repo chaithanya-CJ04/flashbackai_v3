@@ -9,6 +9,7 @@ import {
   ErrorBanner,
   PageShell,
   ScreenIntro,
+  PageLoader,
   Spinner,
 } from "../../components/ui";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
@@ -67,9 +68,7 @@ export default function WalletPage() {
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader />
       </PageShell>
     );
   }

@@ -33,11 +33,23 @@ async function request<T>(
     const errEnvelope = (body && typeof body === "object" && "error" in body
       ? (body as { error?: { code?: string; message?: string; detail?: unknown } }).error
       : null) ?? null;
+    // Walk every common shape a backend uses to convey an error message so
+    // the UI never falls back to a useless "Request failed (500)" when the
+    // server actually told us what went wrong.
+    const fromBody =
+      (typeof body === "object" && body
+        ? String(
+            (body as Record<string, unknown>).message ??
+              (body as Record<string, unknown>).detail ??
+              (body as Record<string, unknown>).error ??
+              ""
+          )
+        : typeof body === "string"
+          ? body.slice(0, 240)
+          : "") || "";
     const message =
       errEnvelope?.message ||
-      (typeof body === "object" && body && "message" in body
-        ? String((body as { message?: unknown }).message ?? "")
-        : "") ||
+      fromBody ||
       `Request failed (${res.status})`;
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[api] ${init.method || "GET"} ${path} → ${res.status}`, body);

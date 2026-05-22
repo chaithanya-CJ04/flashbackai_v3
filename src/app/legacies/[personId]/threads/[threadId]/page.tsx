@@ -6,8 +6,8 @@ import { EditNodePanel } from "../../../../components/EditNodePanel";
 import {
   Card,
   ErrorBanner,
+  PageLoader,
   PageShell,
-  Spinner,
 } from "../../../../components/ui";
 import { useRequireAuth } from "../../../../hooks/useRequireAuth";
 import { legacyApi, type Thread } from "../../../../lib/api";
@@ -39,9 +39,7 @@ export default function ThreadDetailPage({
   if (auth.status !== "authenticated") {
     return (
       <PageShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Spinner className="h-5 w-5" />
-        </div>
+        <PageLoader label="Opening thread" />
       </PageShell>
     );
   }
@@ -60,9 +58,7 @@ export default function ThreadDetailPage({
       )}
 
       {!thread ? (
-        <div className="flex items-center gap-2 text-xs text-tertiary">
-          <Spinner /> Loading thread…
-        </div>
+        <PageLoader label="Loading thread" />
       ) : (
         <div className="space-y-4">
           <Card className="p-5">
