@@ -1103,3 +1103,149 @@ export function OfflineBanner() {
     </div>
   );
 }
+
+/** Lightweight confirm modal — replaces native `window.confirm()` so the
+ *  prompt sits inside the app's design system instead of a browser dialog.
+ *
+ *  Layout: centered glass card with an icon tile, title, supporting body,
+ *  corner close X, and a right-aligned ghost-secondary + primary action row.
+ *  Esc cancels, Enter confirms. Backdrop click cancels (unless `busy`).
+ *  Body scroll is locked while open. */
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  icon,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  busy = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description?: ReactNode;
+  icon?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  busy?: boolean;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (busy) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, onConfirm, busy]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal
+      aria-labelledby="confirm-dialog-title"
+      onClick={() => !busy && onClose()}
+      className="confirm-dialog-root fixed inset-0 z-[60] grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="confirm-dialog-card relative w-full max-w-md rounded-2xl border border-white/14 bg-[rgba(18,15,34,0.95)] p-5 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.08)] backdrop-blur-xl sm:p-6"
+      >
+        <button
+          type="button"
+          onClick={() => !busy && onClose()}
+          aria-label="Close"
+          disabled={busy}
+          className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full text-tertiary transition hover:bg-white/8 hover:text-white disabled:opacity-40"
+        >
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+
+        <div className="flex items-start gap-3 pr-7 sm:gap-4">
+          {icon && (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5 text-[rgb(var(--accent-soft))]">
+              {icon}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2
+              id="confirm-dialog-title"
+              className="display-sans text-title leading-tight text-white"
+            >
+              {title}
+            </h2>
+            {description && (
+              <div className="mt-1.5 text-caption leading-relaxed text-secondary">
+                {description}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2.5 sm:mt-6">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {cancelLabel}
+          </Button>
+          <Button onClick={onConfirm} disabled={busy}>
+            {busy && <Spinner />}
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .confirm-dialog-root {
+          animation: confirm-fade-in 0.18s ease-out;
+        }
+        .confirm-dialog-card {
+          animation: confirm-scale-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes confirm-fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        @keyframes confirm-scale-in {
+          from {
+            opacity: 0;
+            transform: translateY(6px) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

@@ -17,7 +17,9 @@
       "Bash(sed -n '30,40p' src/app/account/vault/page.tsx)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/onboarding/new)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/explore)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/account)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/account)",
+      "Bash(npx eslint *)",
+      "Bash(node -e \"const ogl = require\\('ogl'\\); console.log\\(Object.keys\\(ogl\\).slice\\(0, 20\\)\\)\")"
     ]
   }
 }

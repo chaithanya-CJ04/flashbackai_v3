@@ -121,6 +121,17 @@ export function BottomNav() {
     return null;
   }
 
+  // Pick the single nav item with the longest href that matches the current
+  // pathname. Prevents nested routes (e.g. /account/rewards) from lighting up
+  // both their own pill and a less-specific parent pill (/account).
+  const activeHref = NAV.filter((item) => !item.primary)
+    .filter(
+      (item) =>
+        pathname === item.href ||
+        pathname.startsWith(item.href + "/"),
+    )
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <nav
       aria-label="Primary"
@@ -134,11 +145,7 @@ export function BottomNav() {
         }}
       >
         {NAV.map((item) => {
-          const active =
-            pathname === item.href ||
-            (item.href !== "/legacies" &&
-              pathname.startsWith(item.href) &&
-              !item.primary);
+          const active = item.href === activeHref;
           if (item.primary) {
             return (
               <button

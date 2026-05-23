@@ -308,9 +308,9 @@ function ConversationCTA({
   const pending = startSession.isPending;
 
   return (
-    <section className="mb-8">
+    <section className="mb-8 flex flex-col items-center text-center">
       {error && (
-        <div className="mb-3">
+        <div className="mb-3 w-full">
           <ErrorBanner>{error}</ErrorBanner>
         </div>
       )}
@@ -319,50 +319,18 @@ function ConversationCTA({
         onClick={() => void handleClick()}
         disabled={pending || sessionsQ.isLoading}
         aria-label={label}
-        className="group relative flex w-full items-center gap-4 overflow-hidden rounded-3xl border-2 border-[rgb(var(--accent-soft))]/55 bg-linear-to-br from-[rgba(60,46,110,0.78)] via-[rgba(36,28,72,0.82)] to-[rgba(20,16,42,0.85)] p-5 text-left backdrop-blur-xl shadow-[0_30px_80px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)] transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/80 hover:shadow-[0_40px_100px_-20px_rgba(123,115,253,0.7),inset_0_1px_0_0_rgba(255,255,255,0.18)] disabled:cursor-wait disabled:opacity-70 sm:gap-5 sm:p-6"
+        className="cta-pill text-caption px-5 py-2.5"
       >
-        {/* Top sheen */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-[rgba(200,170,255,0.6)] to-transparent"
-        />
-        {/* Radial glow that brightens on hover */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_50%,rgba(180,173,255,0.22)_0%,transparent_60%)] opacity-80 transition group-hover:opacity-100"
-        />
-
-        {/* Speech-bubble icon — universally legible */}
-        <span
-          aria-hidden
-          className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/25 bg-white/12 text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] sm:h-16 sm:w-16"
-        >
+        <span className="inline-flex items-center gap-2">
           {pending ? (
-            <Spinner className="h-5 w-5" />
+            <Spinner className="h-4 w-4" />
           ) : isContinuing ? (
-            // Pulsing dot — live conversation
-            <span className="relative inline-flex">
-              <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
-                <path
-                  d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6z"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinejoin="round"
-                />
-                <circle cx="9" cy="10" r="1" fill="currentColor" />
-                <circle cx="13" cy="10" r="1" fill="currentColor" />
-                <circle cx="17" cy="10" r="1" fill="currentColor" />
-              </svg>
-              <span
-                aria-hidden
-                className="absolute -right-1 -top-1 inline-flex h-3 w-3"
-              >
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
-                <span className="relative inline-flex h-3 w-3 rounded-full border border-emerald-200 bg-emerald-400" />
-              </span>
+            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+              <span className="absolute inline-flex h-2.5 w-2.5 animate-ping rounded-full bg-emerald-300/70" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
             </span>
           ) : (
-            <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
               <path
                 d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V6z"
                 stroke="currentColor"
@@ -377,30 +345,12 @@ function ConversationCTA({
               />
             </svg>
           )}
-        </span>
-
-        <div className="relative min-w-0 flex-1">
-          <p className="display-sans text-title leading-tight text-white">
-            {label}
-          </p>
-          <p className="text-body mt-1.5 text-secondary">{subtitle}</p>
-        </div>
-
-        <span
-          aria-hidden
-          className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/30 bg-white/8 text-white transition group-hover:border-white/55 group-hover:bg-white/16 sm:h-12 sm:w-12"
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-            <path
-              d="M9 5l7 7-7 7"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <span className="font-medium">{label}</span>
         </span>
       </button>
+      <p className="mt-2 label-mono text-meta tracking-[0.18em] text-tertiary">
+        {subtitle}
+      </p>
     </section>
   );
 }
@@ -446,6 +396,85 @@ function tierVisual(tier: string | null): TierVisual {
   };
 }
 
+/** Hex-shaped sigil for a theme badge. The hex echoes the app's hex-grid
+ *  background motif and reads as a sealed artifact when locked (dashed
+ *  stroke + tiny lock seal at the lower-right corner). Unlocked variants
+ *  use a solid stroke and inherit the tier color via the wrapping pill. */
+function HexSigil({
+  locked,
+  iconNode,
+  tone,
+}: {
+  locked: boolean;
+  iconNode: React.ReactNode;
+  tone: { fill: string; stroke: string; dashed: boolean };
+}) {
+  // Flat-top hexagon points in a 44×44 viewBox, leaving 2-3px headroom for
+  // the stroke so it doesn't clip on Retina.
+  const pts = "22,3 39.3,12.6 39.3,31.4 22,41 4.7,31.4 4.7,12.6";
+  return (
+    <span aria-hidden className="relative block h-11 w-11 shrink-0">
+      <svg
+        viewBox="0 0 44 44"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+      >
+        {/* Inner faint hatch — sealed-glass feel when locked. Drawn only
+            once via a single line set rotated diagonally; clipped to the
+            hex with a polygon mask so it stays inside the frame. */}
+        {locked && (
+          <>
+            <defs>
+              <clipPath id="hex-clip">
+                <polygon points={pts} />
+              </clipPath>
+            </defs>
+            <g clipPath="url(#hex-clip)" opacity="0.35">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <line
+                  key={i}
+                  x1={-10 + i * 8}
+                  y1={-2}
+                  x2={-10 + i * 8 + 44}
+                  y2={50}
+                  stroke="rgba(180,173,255,0.18)"
+                  strokeWidth="0.6"
+                />
+              ))}
+            </g>
+          </>
+        )}
+        <polygon
+          points={pts}
+          fill={tone.fill}
+          stroke={tone.stroke}
+          strokeWidth="1"
+          strokeDasharray={tone.dashed ? "3 3" : undefined}
+        />
+      </svg>
+      <span className="absolute inset-0 grid place-items-center">
+        {iconNode}
+      </span>
+      {locked && (
+        <span className="absolute -bottom-0.5 -right-0.5 grid h-[15px] w-[15px] place-items-center rounded-full border border-white/30 bg-black text-[rgb(var(--accent-soft))] shadow-[0_4px_10px_rgba(0,0,0,0.6)]">
+          <svg
+            viewBox="0 0 12 12"
+            className="h-2.5 w-2.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="6" width="6" height="4.5" rx="0.8" />
+            <path d="M4.2 6V4.6a1.8 1.8 0 0 1 3.6 0V6" />
+          </svg>
+        </span>
+      )}
+    </span>
+  );
+}
+
 function BadgesSection({
   personId,
   selectedThemeId,
@@ -456,6 +485,7 @@ function BadgesSection({
   onSelect: (id: string | null) => void;
 }) {
   const q = useThemes(personId);
+  const router = useRouter();
 
   // Surface unlocked themes first, then any with a tier, then the rest.
   const themes: Theme[] = useMemo(() => {
@@ -516,45 +546,105 @@ function BadgesSection({
       >
         {themes.map((t) => {
           const active = selectedThemeId === t.id;
-          const locked = t.state === "locked";
+          // A theme is "truly locked" only when it has zero qualifying
+          // moments. If qualifyingCount > 0 the gallery filter already
+          // works against it, so labelling it LOCKED is misleading — it
+          // reads as functionally unlocked even if the backend state
+          // hasn't flipped to "unlocked" yet.
+          const trulyLocked = t.state === "locked" && t.qualifyingCount === 0;
           const vis = tierVisual(t.tier);
+          const subtitle = trulyLocked
+            ? "LOCKED"
+            : t.tier
+              ? `${t.tier.toUpperCase()} · ${t.qualifyingCount}`
+              : `${t.qualifyingCount} MOMENT${t.qualifyingCount === 1 ? "" : "S"}`;
+          // Truly-locked badges route to the theme detail page where the
+          // archetype unlock questions live. Anything with moments toggles
+          // the gallery filter inline.
+          const handleClick = () => {
+            if (trulyLocked) {
+              router.push(
+                `/legacies/${encodeURIComponent(personId)}/themes/${encodeURIComponent(t.id)}`
+              );
+              return;
+            }
+            onSelect(active ? null : t.id);
+          };
           return (
             <button
               key={t.id}
-              onClick={() => onSelect(active ? null : t.id)}
-              disabled={locked && t.qualifyingCount === 0}
-              className={`group relative shrink-0 snap-start overflow-hidden rounded-2xl border px-3 py-2.5 text-left backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color] duration-300 ${
+              onClick={handleClick}
+              aria-label={
+                trulyLocked
+                  ? `Unlock ${t.displayName}`
+                  : active
+                    ? `Clear ${t.displayName} filter`
+                    : `Filter by ${t.displayName}`
+              }
+              className={`group relative shrink-0 snap-start overflow-hidden rounded-2xl border px-3.5 py-3 text-left backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color,transform] duration-300 active:scale-[0.98] ${
                 active
                   ? "border-[rgb(var(--accent-soft))]/65 bg-[rgba(60,46,110,0.7)] shadow-[0_30px_60px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)]"
                   : `${vis.surface} hover:border-[rgb(var(--accent-soft))]/45 hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]`
-              } ${locked && t.qualifyingCount === 0 ? "opacity-55" : ""}`}
+              } ${trulyLocked ? "opacity-85" : ""}`}
             >
+              {/* Top hairline gleam */}
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-white/22 to-transparent"
               />
-              <div className="relative flex items-center gap-2.5">
+              {trulyLocked && (
                 <span
                   aria-hidden
-                  className={`grid h-9 w-9 place-items-center rounded-full border ${vis.ring} ${locked ? "opacity-75" : ""}`}
-                >
-                  <ThemeIcon
-                    slug={t.slug}
-                    name={t.displayName}
-                    size={18}
-                    className={vis.label}
-                  />
-                </span>
+                  className="pointer-events-none absolute -right-3 -top-3 h-16 w-16 rounded-full bg-[rgb(var(--accent-soft))]/8 blur-2xl"
+                />
+              )}
+              <div className="relative flex items-center gap-3">
+                <HexSigil
+                  locked={trulyLocked}
+                  iconNode={
+                    <ThemeIcon
+                      slug={t.slug}
+                      name={t.displayName}
+                      size={18}
+                      className={
+                        trulyLocked
+                          ? "text-[rgb(var(--accent-soft))]/70"
+                          : vis.label
+                      }
+                    />
+                  }
+                  tone={
+                    trulyLocked
+                      ? {
+                          fill: "rgba(123,115,253,0.06)",
+                          stroke: "rgba(180,173,255,0.32)",
+                          dashed: true,
+                        }
+                      : {
+                          fill: "rgba(123,115,253,0.10)",
+                          stroke: "rgba(180,173,255,0.55)",
+                          dashed: false,
+                        }
+                  }
+                />
                 <div className="min-w-0">
-                  <p className={`max-w-40 truncate text-caption ${locked ? "text-secondary" : "text-primary"}`}>
+                  <p
+                    className={`max-w-40 truncate ${
+                      trulyLocked
+                        ? "serif text-[15px] leading-tight text-secondary"
+                        : "text-caption text-primary"
+                    }`}
+                  >
                     {t.displayName}
                   </p>
-                  <p className="mt-0.5 label-mono text-meta text-tertiary">
-                    {locked
-                      ? "locked"
-                      : t.tier
-                        ? `${t.tier} · ${t.qualifyingCount}`
-                        : `${t.qualifyingCount} moment${t.qualifyingCount === 1 ? "" : "s"}`}
+                  <p
+                    className={`mt-1 label-mono text-meta tracking-[0.22em] ${
+                      trulyLocked
+                        ? "text-[rgb(var(--accent-soft))]/75"
+                        : "text-tertiary"
+                    }`}
+                  >
+                    {subtitle}
                   </p>
                 </div>
               </div>

@@ -10,6 +10,7 @@ import {
 } from "../components/MomentViewer";
 import TiltedCard from "../components/TiltedCard";
 import {
+  Chip,
   EmptyState,
   ErrorBanner,
   PageLoader,
@@ -18,15 +19,21 @@ import {
   Spinner,
 } from "../components/ui";
 import { useRequireAuth } from "../hooks/useRequireAuth";
-import { legacyApi, type Legacy, type Moment } from "../lib/api";
+import {
+  legacyApi,
+  type LegacyEntity,
+  type Moment,
+} from "../lib/api";
 import { qk, useLegacies } from "../lib/queries";
 
-type TabId = "flashbacks" | "people";
+type TabId = "flashbacks" | "entities";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "flashbacks", label: "Flashbacks" },
-  { id: "people", label: "People" },
+  { id: "entities", label: "Entities" },
 ];
+
+const ENTITY_KINDS = ["", "person", "place", "object", "event"] as const;
 
 function momentImageSrc(m: ViewerMoment): string {
   if (m.thumbnailUrl && /^https?:\/\//i.test(m.thumbnailUrl)) {
@@ -47,11 +54,10 @@ function momentImageSrc(m: ViewerMoment): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function personImageSrc(p: Legacy): string {
-  if (p.referenceImageUrl && /^https?:\/\//i.test(p.referenceImageUrl)) {
-    return p.referenceImageUrl;
-  }
-  const seed = (p.deceasedName || "?").replace(/[<>&"']/g, "");
+function entityImageSrc(e: LegacyEntity): string {
+  const url = e.thumbnailUrl || e.imageUrl;
+  if (url && /^https?:\/\//i.test(url)) return url;
+  const seed = (e.name || "?").replace(/[<>&"']/g, "");
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='800' viewBox='0 0 600 800'>
     <defs>
       <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
@@ -103,7 +109,7 @@ export default function ExplorePage() {
         module="Explore"
         meta="your archive"
         title={{ top: "EVERYTHING YOU'VE", accent: "PRESERVED." }}
-        subtitle="Moments and people from every legacy you keep, in one place."
+        subtitle="Moments and entities from every legacy you keep, in one place."
       />
 
       <div className="mb-4 flex gap-1 border-b border-white/10">
@@ -122,7 +128,7 @@ export default function ExplorePage() {
         ))}
       </div>
 
-      {tab === "flashbacks" ? <FlashbacksTab /> : <PeopleTab />}
+      {tab === "flashbacks" ? <FlashbacksTab /> : <EntitiesTab />}
     </PageShell>
   );
 }
@@ -291,8 +297,25 @@ function FlashbacksTab() {
   );
 }
 
-function PeopleTab() {
+type AggregatedEntity = LegacyEntity & {
+  personId: string;
+  personName: string;
+};
+
+function EntitiesTab() {
   const legaciesQ = useLegacies();
+  const legacies = legaciesQ.data?.legacies ?? [];
+  const [kindFilter, setKindFilter] = useState<string>("");
+
+  const entityQueries = useQueries({
+    queries: legacies.map((p) => ({
+      queryKey: qk.entities(p.personId, ""),
+      queryFn: () =>
+        legacyApi.listEntities(p.personId, 100, "").then((r) => r.items),
+      staleTime: 1000 * 60 * 2,
+      enabled: !!p.personId,
+    })),
+  });
 
   if (legaciesQ.isError) {
     return (
@@ -310,70 +333,131 @@ function PeopleTab() {
       </div>
     );
   }
-  const people = legaciesQ.data?.legacies ?? [];
-  if (people.length === 0) {
+  if (legacies.length === 0) {
     return (
       <EmptyState
-        title="No people yet"
-        hint="Start an onboarding to add someone to your archive."
+        title="No entities yet"
+        hint="Start an onboarding to begin preserving moments."
       />
     );
   }
 
-  return (
-    <div
-      className="no-scrollbar -mx-4 flex snap-x snap-proximity items-stretch gap-6 overflow-x-auto px-4 py-12 sm:-mx-6 sm:gap-8 sm:px-6 sm:py-14 md:-mx-8 md:px-8"
-      style={{
-        scrollPaddingLeft: "1rem",
-        scrollPaddingRight: "1rem",
-        maskImage:
-          "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-        WebkitMaskImage:
-          "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-      }}
-    >
-      {people.map((p, i) => (
-        <div key={p.personId} className="shrink-0 snap-center">
-          <Link
-            href={`/legacies/${encodeURIComponent(p.personId)}`}
-            aria-label={`Open ${p.deceasedName}`}
-          >
-            <TiltedCard
-              imageSrc={personImageSrc(p)}
-              altText={p.deceasedName}
-              captionText={p.deceasedName}
-              containerHeight="clamp(340px, 65vw, 460px)"
-              containerWidth="clamp(260px, 72vw, 360px)"
-              imageHeight="clamp(340px, 65vw, 460px)"
-              imageWidth="clamp(260px, 72vw, 360px)"
-              rotateAmplitude={12}
-              scaleOnHover={1.05}
-              displayOverlayContent
-              overlayContent={
-                <div className="relative flex h-full w-full flex-col justify-between rounded-[18px] p-4 sm:p-5">
-                  <div className="flex items-start justify-between">
-                    <span className="rounded-full bg-black/55 px-2 py-0.5 label-mono text-meta text-primary backdrop-blur">
-                      {String(i + 1).padStart(3, "0")}
-                    </span>
-                  </div>
+  const anyLoading = entityQueries.some((q) => q.isLoading);
+  const allEntities: AggregatedEntity[] = entityQueries.flatMap((q, i) => {
+    const p = legacies[i];
+    return (q.data ?? []).map((e) => ({
+      ...e,
+      personId: p.personId,
+      personName: p.deceasedName,
+    }));
+  });
 
-                  <div className="rounded-2xl bg-black/55 p-3 text-left backdrop-blur sm:p-4">
-                    <p className="label-mono text-meta text-secondary">
-                      {p.relationship || "Person"}
-                    </p>
-                    <p className="display-sans mt-1 text-title text-white">
-                      {p.deceasedName}
-                    </p>
-                    <p className="mt-2 label-mono text-meta text-tertiary">
-                      {relativeTime(p.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              }
-            />
-          </Link>
+  const entities = kindFilter
+    ? allEntities.filter((e) => e.kind === kindFilter)
+    : allEntities;
+
+  entities.sort((a, b) => {
+    const ta = Date.parse(a.createdAt) || 0;
+    const tb = Date.parse(b.createdAt) || 0;
+    return tb - ta;
+  });
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {ENTITY_KINDS.map((k) => (
+          <Chip
+            key={k || "all"}
+            active={kindFilter === k}
+            onClick={() => setKindFilter(k)}
+            className="font-mono uppercase tracking-[0.25em]"
+          >
+            {k || "all"}
+          </Chip>
+        ))}
+      </div>
+
+      {anyLoading && entities.length === 0 ? (
+        <div className="flex items-center gap-2 text-xs text-tertiary">
+          <Spinner /> Loading entities…
         </div>
-      ))}
+      ) : entities.length === 0 ? (
+        <EmptyState
+          title={
+            kindFilter
+              ? `No ${kindFilter} entities yet.`
+              : "No entities yet."
+          }
+          hint="Entities surface as you share stories about people, places, objects, and events."
+        />
+      ) : (
+        <div
+          className="no-scrollbar -mx-4 flex snap-x snap-proximity items-stretch gap-6 overflow-x-auto px-4 py-12 sm:-mx-6 sm:gap-8 sm:px-6 sm:py-14 md:-mx-8 md:px-8"
+          style={{
+            scrollPaddingLeft: "1rem",
+            scrollPaddingRight: "1rem",
+            maskImage:
+              "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
+          }}
+        >
+          {entities.map((e, i) => (
+            <div key={`${e.personId}:${e.id}`} className="shrink-0 snap-center">
+              <Link
+                href={`/legacies/${encodeURIComponent(
+                  e.personId
+                )}/entities/${encodeURIComponent(e.id)}`}
+                aria-label={`Open ${e.name}`}
+              >
+                <TiltedCard
+                  imageSrc={entityImageSrc(e)}
+                  altText={e.name}
+                  captionText={e.name}
+                  containerHeight="clamp(340px, 65vw, 460px)"
+                  containerWidth="clamp(260px, 72vw, 360px)"
+                  imageHeight="clamp(340px, 65vw, 460px)"
+                  imageWidth="clamp(260px, 72vw, 360px)"
+                  rotateAmplitude={12}
+                  scaleOnHover={1.05}
+                  displayOverlayContent
+                  overlayContent={
+                    <div className="relative flex h-full w-full flex-col justify-between rounded-[18px] p-4 sm:p-5">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="rounded-full bg-black/55 px-2 py-0.5 label-mono text-meta text-primary backdrop-blur">
+                          {String(i + 1).padStart(3, "0")}
+                        </span>
+                        {e.kind && (
+                          <span className="rounded-full bg-black/55 px-2 py-0.5 label-mono text-meta uppercase tracking-[0.2em] text-secondary backdrop-blur">
+                            {e.kind}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl bg-black/55 p-3 text-left backdrop-blur sm:p-4">
+                        <p className="label-mono text-meta text-secondary">
+                          {e.personName}
+                        </p>
+                        <p className="display-sans mt-1 text-title text-white">
+                          {e.name}
+                        </p>
+                        {e.description && (
+                          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-secondary">
+                            {e.description}
+                          </p>
+                        )}
+                        <p className="mt-2 label-mono text-meta text-tertiary">
+                          {relativeTime(e.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  }
+                />
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

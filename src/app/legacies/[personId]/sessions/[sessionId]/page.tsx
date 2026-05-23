@@ -6,6 +6,7 @@ import { AppHeader } from "../../../../components/AppHeader";
 import {
   BreathDots,
   Button,
+  ConfirmDialog,
   ErrorBanner,
   PageLoader,
   PageShell,
@@ -75,6 +76,7 @@ export default function ConversationPage({
   const [draft, setDraft] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [wrapConfirmOpen, setWrapConfirmOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -139,14 +141,16 @@ export default function ConversationPage({
     }
   };
 
-  const handleWrap = async () => {
+  const handleWrap = () => {
     if (!session || session.status !== "open") return;
-    if (!confirm("Close this conversation? It will be summarised and archived."))
-      return;
+    setWrapConfirmOpen(true);
+  };
 
+  const confirmWrap = async () => {
     setLocalError(null);
     try {
       await wrapSession.mutateAsync();
+      setWrapConfirmOpen(false);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Failed to wrap session.");
     }
@@ -508,6 +512,34 @@ export default function ConversationPage({
           </div>
         </form>
       )}
+
+      <ConfirmDialog
+        open={wrapConfirmOpen}
+        onClose={() => {
+          if (!wrapSession.isPending) setWrapConfirmOpen(false);
+        }}
+        onConfirm={() => void confirmWrap()}
+        busy={wrapSession.isPending}
+        title="Wrap this conversation?"
+        description="We'll summarise what was shared and archive it. You can start a new conversation anytime."
+        confirmLabel={wrapSession.isPending ? "Wrapping…" : "Wrap & archive"}
+        cancelLabel="Keep talking"
+        icon={
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="4" rx="1.2" />
+            <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+            <path d="M10 12h4" />
+          </svg>
+        }
+      />
     </PageShell>
   );
 }
