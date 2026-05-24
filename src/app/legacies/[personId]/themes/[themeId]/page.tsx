@@ -152,7 +152,7 @@ export default function ThemeDetailPage({
         </div>
       ) : (
         <div className="space-y-6">
-          <Card className="p-5">
+          <Card halo="violet" className="p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <span

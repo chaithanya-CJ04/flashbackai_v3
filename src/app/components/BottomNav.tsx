@@ -133,9 +133,19 @@ export function BottomNav() {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
+    // Anchor to bottom-0 with padding-bottom that respects safe-area-inset
+    // (plus a small minimum so the labels never sit on the home-indicator
+    // line). Padding-bottom must be the *only* thing lifting the pill —
+    // mixing bottom-3 with pb-safe-inside was unreliable on iOS where the
+    // url bar reveals/hides change the visual viewport.
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-3 z-30 flex justify-center px-3 pb-safe sm:bottom-5"
+      className="fixed inset-x-0 bottom-0 z-30 flex justify-center px-3"
+      style={{
+        paddingBottom:
+          "max(0.75rem, calc(env(safe-area-inset-bottom) + 0.5rem))",
+        paddingTop: "0.5rem",
+      }}
     >
       <div
         className="flex w-full max-w-md items-center justify-around gap-1 rounded-full border border-white/28 px-2 py-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.10)] backdrop-blur-2xl backdrop-saturate-150"
@@ -167,22 +177,23 @@ export function BottomNav() {
               href={item.href}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              className={`relative flex flex-1 flex-col items-center gap-1 rounded-full px-2 py-2 transition active:scale-[0.94] active:duration-75 ${
+              className={`relative flex basis-0 grow flex-col items-center gap-1 rounded-full px-1 py-1.5 transition active:scale-[0.94] active:duration-75 ${
                 active
                   ? "bg-white/10 text-white"
                   : "text-secondary hover:bg-white/5 hover:text-white active:bg-white/8"
               }`}
             >
-              {/* Active indicator — a small violet dot below the label so the
-                  user always knows where they are even without text contrast. */}
+              {/* Active indicator — a small violet dot above the icon so
+                  the user always knows where they are even without
+                  contrast on the label. */}
               {active && (
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute -top-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_8px_rgba(180,173,255,0.9)]"
+                  className="pointer-events-none absolute -top-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_8px_rgba(180,173,255,0.9)]"
                 />
               )}
               {item.icon}
-              <span className="label-mono text-meta font-medium">
+              <span className="label-mono text-[11px] font-medium leading-tight">
                 {item.label}
               </span>
             </Link>

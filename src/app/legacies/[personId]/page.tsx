@@ -5,6 +5,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "../../components/AppHeader";
 import { Avatar } from "../../components/Avatar";
+import { DeckRail } from "../../components/DeckRail";
 import { MomentViewer, type ViewerMoment } from "../../components/MomentViewer";
 import TiltedCard from "../../components/TiltedCard";
 import {
@@ -19,6 +20,7 @@ import {
   PageLoader,
   PageShell,
   RowLink,
+  SectionHeading,
   Spinner,
   ThemeIcon,
 } from "../../components/ui";
@@ -195,43 +197,41 @@ function ProfileSection({
   profileSummary: string | null;
 }) {
   return (
-    <section className="mb-8 flex items-center gap-4 sm:gap-5">
-      <div className="relative shrink-0">
-        <span
-          aria-hidden
-          className="absolute inset-[-12px] -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(123,115,253,0.32),transparent_75%)] blur-md"
-        />
-        <Avatar
-          name={name}
-          imageUrl={imageUrl}
-          thumbnailUrl={thumbnailUrl}
-          size={112}
-        />
-        {/* Level badge top-right of avatar (PRD §6 row 1, §9.2).
-            Until backend exposes a 1–10 level, render the `phase` string. */}
-        {phaseLabel && (
-          <span
-            className="absolute -right-1 -top-1 rounded-full border border-[rgb(var(--accent-soft))]/55 bg-[rgb(var(--accent))]/25 px-2 py-1 label-mono text-meta text-white backdrop-blur"
-            title="Profile phase"
-          >
-            {phaseLabel}
-          </span>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="label-mono text-meta text-tertiary">
-          {relationship}
+    <section className="mb-8">
+      <Card halo="violet" className="flex items-center gap-4 p-5 sm:gap-5 sm:p-6">
+        <div className="relative shrink-0">
+          <Avatar
+            name={name}
+            imageUrl={imageUrl}
+            thumbnailUrl={thumbnailUrl}
+            size={112}
+          />
+          {/* Level badge top-right of avatar (PRD §6 row 1, §9.2).
+              Until backend exposes a 1–10 level, render the `phase` string. */}
+          {phaseLabel && (
+            <span
+              className="absolute -right-1 -top-1 rounded-full border border-[rgb(var(--accent-soft))]/55 bg-[rgb(var(--accent))]/25 px-2 py-1 label-mono text-meta text-white backdrop-blur"
+              title="Profile phase"
+            >
+              {phaseLabel}
+            </span>
+          )}
         </div>
-        <p className="display-sans text-headline mt-1.5 truncate leading-[1.05] text-white">
-          {name}
-        </p>
-        {profileSummary && (
-          <p className="text-caption mt-1.5 line-clamp-2 leading-relaxed text-secondary">
-            {profileSummary}
+
+        <div className="min-w-0 flex-1">
+          <div className="label-mono text-meta text-tertiary">
+            {relationship}
+          </div>
+          <p className="display-sans text-headline mt-1.5 truncate leading-[1.05] text-white">
+            {name}
           </p>
-        )}
-      </div>
+          {profileSummary && (
+            <p className="text-caption mt-1.5 line-clamp-2 leading-relaxed text-secondary">
+              {profileSummary}
+            </p>
+          )}
+        </div>
+      </Card>
     </section>
   );
 }
@@ -391,7 +391,7 @@ function tierVisual(tier: string | null): TierVisual {
   // (see PRD §8.2). Untiered themes render as a dim outline.
   return {
     ring: "border-white/12 bg-white/3",
-    surface: "border-white/15 bg-[rgba(18,15,34,0.62)]",
+    surface: "border-white/22 bg-[rgba(18,15,34,0.82)]",
     label: "text-tertiary",
   };
 }
@@ -585,7 +585,7 @@ function BadgesSection({
                 active
                   ? "border-[rgb(var(--accent-soft))]/65 bg-[rgba(60,46,110,0.7)] shadow-[0_30px_60px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)]"
                   : `${vis.surface} hover:border-[rgb(var(--accent-soft))]/45 hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]`
-              } ${trulyLocked ? "opacity-85" : ""}`}
+              }`}
             >
               {/* Top hairline gleam */}
               <span
@@ -616,9 +616,9 @@ function BadgesSection({
                   tone={
                     trulyLocked
                       ? {
-                          fill: "rgba(123,115,253,0.06)",
-                          stroke: "rgba(180,173,255,0.32)",
-                          dashed: true,
+                          fill: "rgba(123,115,253,0.08)",
+                          stroke: "rgba(180,173,255,0.38)",
+                          dashed: false,
                         }
                       : {
                           fill: "rgba(123,115,253,0.10)",
@@ -629,18 +629,16 @@ function BadgesSection({
                 />
                 <div className="min-w-0">
                   <p
-                    className={`max-w-40 truncate ${
-                      trulyLocked
-                        ? "serif text-[15px] leading-tight text-secondary"
-                        : "text-caption text-primary"
+                    className={`max-w-40 truncate text-caption ${
+                      trulyLocked ? "text-secondary" : "text-primary"
                     }`}
                   >
                     {t.displayName}
                   </p>
                   <p
-                    className={`mt-1 label-mono text-meta tracking-[0.22em] ${
+                    className={`mt-1 label-mono text-meta ${
                       trulyLocked
-                        ? "text-[rgb(var(--accent-soft))]/75"
+                        ? "text-[rgb(var(--accent-soft))]/70"
                         : "text-tertiary"
                     }`}
                   >
@@ -736,20 +734,7 @@ function GallerySection({
         />
       ) : (
         <>
-          {/* Horizontal stack of TiltedCards. Vertical padding gives the
-              hover scale room to breathe; horizontal mask softly dissolves
-              the left/right edges instead of a hard viewport-edge clip. */}
-          <div
-            className="no-scrollbar -mx-4 flex snap-x snap-proximity items-stretch gap-6 overflow-x-auto px-4 py-12 sm:-mx-6 sm:gap-8 sm:px-6 sm:py-14 md:-mx-8 md:px-8"
-            style={{
-              scrollPaddingLeft: "1rem",
-              scrollPaddingRight: "1rem",
-              maskImage:
-                "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-              WebkitMaskImage:
-                "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-            }}
-          >
+          <DeckRail>
             {items.map((m, i) => {
               const hasVideo =
                 !!m.videoUrl &&
@@ -810,7 +795,7 @@ function GallerySection({
                 </div>
               );
             })}
-          </div>
+          </DeckRail>
 
           <p className="mt-2 text-center label-mono text-meta text-tertiary">
             Swipe · scroll · tap to open
@@ -894,7 +879,7 @@ function WorkshopSection({
             ? // Highlighted (open) — accent-violet border, brand bloom, brighter inset
               "border-[rgb(var(--accent-soft))]/55 bg-[rgba(36,28,68,0.78)] shadow-[0_30px_60px_-20px_rgba(123,115,253,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)] hover:bg-[rgba(42,32,80,0.85)]"
             : // Collapsed — quieter dark glass, same surface as RowLink
-              "border-white/12 bg-[rgba(18,15,34,0.62)] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] hover:border-[rgb(var(--accent-soft))]/45 hover:bg-[rgba(28,22,52,0.7)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+              "border-white/22 bg-[rgba(18,15,34,0.82)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.10)] hover:border-[rgb(var(--accent-soft))]/60 hover:bg-[rgba(28,22,52,0.88)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.14)]"
         }`}
       >
         {/* Violet radial wash — always present when open, fades in on hover when closed */}
@@ -1005,26 +990,6 @@ function WorkshopSection({
 }
 
 // ---------- Shared helpers ----------
-
-function SectionHeading({
-  title,
-  hint,
-  action,
-}: {
-  title: string;
-  hint?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-3 flex items-end justify-between gap-3">
-      <div>
-        <h2 className="display-sans text-headline text-white">{title}</h2>
-        {hint && <p className="mt-1 text-caption text-tertiary">{hint}</p>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
 
 function TabHeader({
   title,

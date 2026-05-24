@@ -582,8 +582,17 @@ export const userApi = {
     ),
 
   uploadPortrait: (userId: string, image: File) => {
+    // Field names the backend has been seen to accept across this codebase
+    // (shelby uses "file" + form-userId, onboarding uses "photo", legacy
+    // portrait used "image"). Sending all three keys + userId is harmless
+    // for the ones the route ignores, and unblocks whichever the portrait
+    // route actually reads — backend was returning "Failed to upload user
+    // portrait" on the "image"-only payload.
     const fd = new FormData();
+    fd.append("userId", userId);
+    fd.append("file", image);
     fd.append("image", image);
+    fd.append("photo", image);
     return request<{ message: string; data: { imageUrl: string } }>(
       `/api/v1/users/${encodeURIComponent(userId)}/portrait`,
       { method: "POST", body: fd }

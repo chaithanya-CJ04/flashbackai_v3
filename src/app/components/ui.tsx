@@ -64,15 +64,23 @@ export function PageShell({
  *    - hairline top highlight via inset shadow (catches "light from above")
  *    - soft drop shadow for depth
  *    - `before:` pseudo adds a thin violet sheen along the top edge that
- *      brightens on hover for an "alive" feel. */
+ *      brightens on hover for an "alive" feel.
+ *
+ *  Optional `halo` adds a large, blurred, accent-tinted bloom anchored to
+ *  the card's top-right corner. Use on the page's hero card so it picks
+ *  up the page's accent (the warm tone on Rewards, the violet on most
+ *  pages, mint on themes). Other cards stay clean so the halo card draws
+ *  the eye. */
 export function Card({
   children,
   className = "",
   variant = "default",
+  halo,
 }: {
   children: ReactNode;
   className?: string;
   variant?: "default" | "glass" | "subtle";
+  halo?: "violet" | "warm" | "mint";
 }) {
   const base =
     "group/card relative overflow-hidden rounded-2xl before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-white/35 before:to-transparent";
@@ -84,8 +92,24 @@ export function Card({
     subtle:
       "border border-white/20 bg-[rgba(14,11,28,0.72)] backdrop-blur-md",
   };
+  const haloBg =
+    halo === "warm"
+      ? "bg-[rgba(var(--warm),0.18)]"
+      : halo === "mint"
+        ? "bg-[rgba(var(--mint),0.18)]"
+        : halo === "violet"
+          ? "bg-[rgba(var(--accent-soft),0.20)]"
+          : null;
   return (
-    <div className={`${base} ${variants[variant]} ${className}`}>{children}</div>
+    <div className={`${base} ${variants[variant]} ${className}`}>
+      {haloBg && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full blur-3xl ${haloBg}`}
+        />
+      )}
+      {children}
+    </div>
   );
 }
 
@@ -640,16 +664,21 @@ export function Button({
  *  affordances are an anti-pattern for the target audience (memory care,
  *  elderly users). Still on-brand via the dark glass surface + violet
  *  focus ring. */
+/** Shared focus recipe for inputs / textareas. Avoids the chunky 4px ring
+ *  the old style stacked under the global :focus-visible outline. Instead:
+ *    - 1px accent-soft inner halo (the field "lights up" along its edge)
+ *    - soft violet drop glow underneath (looks lit, not outlined)
+ *    - inset top highlight for the lit-from-above feel
+ *    - background brightens a touch + the field rises 0.5px
+ *  All animated together for a single calm bloom on focus. */
+const FIELD_BASE =
+  "w-full rounded-xl border border-white/28 bg-white/5 px-4 py-3.5 text-body text-white outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out placeholder:text-white/55 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] hover:border-white/40 focus:border-[rgb(var(--accent-soft))]/60 focus:bg-white/8 focus:-translate-y-px focus:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_0_0_1px_rgba(180,173,255,0.30),0_12px_32px_-10px_rgba(123,115,253,0.45)]";
+
 export function Input({
   className = "",
   ...rest
 }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={`w-full rounded-xl border border-white/28 bg-white/5 px-4 py-3.5 text-body text-white outline-none transition placeholder:text-white/55 hover:border-white/40 focus:border-[rgb(var(--accent-soft))]/70 focus:bg-white/8 focus:shadow-[0_0_0_4px_rgba(180,173,255,0.18)] ${className}`}
-      {...rest}
-    />
-  );
+  return <input className={`${FIELD_BASE} ${className}`} {...rest} />;
 }
 
 export function Textarea({
@@ -662,7 +691,7 @@ export function Textarea({
   return (
     <textarea
       ref={ref}
-      className={`w-full resize-none rounded-xl border border-white/28 bg-white/5 px-4 py-3.5 text-body text-white outline-none transition placeholder:text-white/55 hover:border-white/40 focus:border-[rgb(var(--accent-soft))]/70 focus:bg-white/8 focus:shadow-[0_0_0_4px_rgba(180,173,255,0.18)] ${className}`}
+      className={`${FIELD_BASE} resize-none ${className}`}
       {...rest}
     />
   );
@@ -768,6 +797,28 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   return <p className="eyebrow">{children}</p>;
 }
 
+/** SectionHeading — the canonical "h2 + hint + optional action" pattern
+ *  used across the polished pages. Use for any sub-section within a page. */
+export function SectionHeading({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-3">
+      <div>
+        <h2 className="display-sans text-headline text-white">{title}</h2>
+        {hint && <p className="mt-1 text-caption text-tertiary">{hint}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
 /** Tech-readout strip + headline. The signature hero pattern across screens.
  *  Use for every primary screen so they share visual DNA. */
 export function ScreenIntro({
@@ -776,6 +827,7 @@ export function ScreenIntro({
   title,
   subtitle,
   accent = "default",
+  compact = false,
 }: {
   /** Short module name in mono caps (e.g. "Vault", "Rewards"). */
   module: string;
@@ -786,6 +838,9 @@ export function ScreenIntro({
   subtitle?: string;
   /** Color of the gradient accent line on the title. */
   accent?: "default" | "warm" | "mint";
+  /** Compact mode shrinks the headline + spacing for dashboard-y screens
+   *  where the body grid needs to sit above the fold on desktop. */
+  compact?: boolean;
 }) {
   const accentBg =
     accent === "warm"
@@ -794,8 +849,16 @@ export function ScreenIntro({
         ? "linear-gradient(180deg, rgba(var(--mint),1) 0%, rgba(var(--accent-soft),0.85) 100%)"
         : "linear-gradient(180deg, rgba(var(--accent-soft),1) 0%, rgba(var(--accent),1) 100%)";
 
+  const sectionCls = compact ? "mb-5 sm:mb-6" : "mb-8 sm:mb-10";
+  const headlineCls = compact
+    ? "display-sans text-headline mt-3 leading-[0.98] text-white"
+    : "display-sans text-display mt-4 leading-[0.95] text-white";
+  const subtitleCls = compact
+    ? "mt-2 max-w-md text-caption text-secondary"
+    : "mt-4 max-w-md text-body text-secondary";
+
   return (
-    <section className="mb-8 sm:mb-10">
+    <section className={sectionCls}>
       <div className="flex items-center gap-3 label-mono text-meta text-tertiary">
         <span className="relative inline-flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[rgb(var(--accent-soft))]/40" />
@@ -811,11 +874,19 @@ export function ScreenIntro({
       </div>
 
       {typeof title === "string" ? (
-        <h1 className="display-sans text-display mt-4 leading-[0.95] text-white">
-          {title}
+        <h1 className={headlineCls}>{title}</h1>
+      ) : compact ? (
+        <h1 className={headlineCls}>
+          {title.top}{" "}
+          <span
+            className="bg-clip-text text-transparent"
+            style={{ backgroundImage: accentBg }}
+          >
+            {title.accent}
+          </span>
         </h1>
       ) : (
-        <h1 className="display-sans text-display mt-4 leading-[0.95] text-white">
+        <h1 className={headlineCls}>
           {title.top}
           <br />
           <span
@@ -827,9 +898,7 @@ export function ScreenIntro({
         </h1>
       )}
 
-      {subtitle && (
-        <p className="mt-4 max-w-md text-body text-secondary">{subtitle}</p>
-      )}
+      {subtitle && <p className={subtitleCls}>{subtitle}</p>}
     </section>
   );
 }

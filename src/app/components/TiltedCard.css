@@ -6,6 +6,7 @@
   align-items: center;
   justify-content: center;
   margin: 0;
+  cursor: pointer;
 }
 
 .tilted-card-inner {
@@ -21,6 +22,44 @@
   border-radius: 18px;
   will-change: transform;
   transform: translateZ(0);
+  /* Match the home-screen Portrait card: hairline border + violet glow on
+     hover. Transition only the border + shadow so framer-motion stays in
+     charge of the scale/tilt. */
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 14px 40px -22px rgba(0, 0, 0, 0.7);
+  transition: border-color 300ms ease, box-shadow 300ms ease;
+}
+
+.tilted-card-figure:hover .tilted-card-img {
+  border-color: rgba(180, 173, 255, 0.40);
+  box-shadow: 0 30px 60px -20px rgba(123, 115, 253, 0.5);
+}
+
+.tilted-card-figure:active .tilted-card-img {
+  border-color: rgba(180, 173, 255, 0.60);
+  box-shadow: 0 12px 36px -16px rgba(123, 115, 253, 0.7);
+}
+
+/* Warm radial halo that fades in on hover — same recipe as the home
+   Portrait card. Sits on the inner so it tilts/scales with the image. */
+.tilted-card-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 60% at 50% 120%,
+    rgba(240, 200, 154, 0.18) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 500ms ease;
+  z-index: 1;
+}
+
+.tilted-card-figure:hover .tilted-card-inner::after {
+  opacity: 1;
 }
 
 .tilted-card-overlay {

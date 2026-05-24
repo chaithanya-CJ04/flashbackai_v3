@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { DeckRail } from "../components/DeckRail";
 import { useQueries } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
 import {
@@ -103,9 +104,10 @@ export default function ExplorePage() {
   }
 
   return (
-    <PageShell>
+    <PageShell wide>
       <AppHeader title="Explore" />
       <ScreenIntro
+        compact
         module="Explore"
         meta="your archive"
         title={{ top: "EVERYTHING YOU'VE", accent: "PRESERVED." }}
@@ -117,10 +119,10 @@ export default function ExplorePage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`border-b-2 px-3 py-2 text-xs transition ${
+            className={`border-b-2 px-3 py-2 label-mono text-meta transition ${
               tab === t.id
-                ? "border-violet-400 text-white"
-                : "border-transparent text-secondary hover:text-white/80"
+                ? "border-[rgb(var(--accent-soft))] text-white"
+                : "border-transparent text-tertiary hover:text-white/80"
             }`}
           >
             {t.label}
@@ -210,17 +212,7 @@ function FlashbacksTab() {
 
   return (
     <div>
-      <div
-        className="no-scrollbar -mx-4 flex snap-x snap-proximity items-stretch gap-6 overflow-x-auto px-4 py-12 sm:-mx-6 sm:gap-8 sm:px-6 sm:py-14 md:-mx-8 md:px-8"
-        style={{
-          scrollPaddingLeft: "1rem",
-          scrollPaddingRight: "1rem",
-          maskImage:
-            "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-        }}
-      >
+      <DeckRail>
         {moments.map((m, i) => {
           const hasVideo =
             !!m.videoUrl &&
@@ -283,7 +275,7 @@ function FlashbacksTab() {
             </div>
           );
         })}
-      </div>
+      </DeckRail>
 
       {viewerIndex !== null && (
         <MomentViewer
@@ -391,17 +383,7 @@ function EntitiesTab() {
           hint="Entities surface as you share stories about people, places, objects, and events."
         />
       ) : (
-        <div
-          className="no-scrollbar -mx-4 flex snap-x snap-proximity items-stretch gap-6 overflow-x-auto px-4 py-12 sm:-mx-6 sm:gap-8 sm:px-6 sm:py-14 md:-mx-8 md:px-8"
-          style={{
-            scrollPaddingLeft: "1rem",
-            scrollPaddingRight: "1rem",
-            maskImage:
-              "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)",
-          }}
-        >
+        <DeckRail>
           {entities.map((e, i) => (
             <div key={`${e.personId}:${e.id}`} className="shrink-0 snap-center">
               <Link
@@ -456,7 +438,7 @@ function EntitiesTab() {
               </Link>
             </div>
           ))}
-        </div>
+        </DeckRail>
       )}
     </div>
   );

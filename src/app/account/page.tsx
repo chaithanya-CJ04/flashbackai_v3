@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import {
   Button,
   Card,
+  Chip,
+  ConfirmDialog,
   ErrorBanner,
   Input,
   PageShell,
@@ -17,6 +18,7 @@ import {
 import { useRequireAuth } from "../hooks/useRequireAuth";
 import { clearToken } from "../hooks/useAuth";
 import { userApi, type UserDetails } from "../lib/api";
+import { useWallet } from "../lib/queries";
 
 const GENDERS = ["Male", "Female", "Other", "Prefer not to say"];
 const ETHNICITIES = [
@@ -54,7 +56,23 @@ export default function AccountPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const toast = useToast();
+
+  const walletQ = useWallet(userId);
+  const wd = walletQ.data?.walletDetails as
+    | { wallet_address?: string; storage_url?: string }
+    | undefined;
+  const walletAddress = wd?.wallet_address ?? "";
+  const walletChainUrl = walletAddress
+    ? `https://greenfieldscan.com/account/${walletAddress}`
+    : "";
+  const walletStorageUrl = wd?.storage_url ?? "";
+
+  const confirmLogout = () => {
+    clearToken();
+    window.location.replace("/login");
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -125,7 +143,24 @@ export default function AccountPage() {
       );
       toast.show("Portrait updated", "success");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Upload failed.";
+      // Surface backend status + detail so the next-step fix is debuggable
+      // instead of forever showing "Failed to upload user portrait".
+      const apiErr = e as { status?: number; detail?: unknown; message?: string };
+      const detail =
+        typeof apiErr?.detail === "string"
+          ? apiErr.detail
+          : apiErr?.detail
+            ? JSON.stringify(apiErr.detail).slice(0, 200)
+            : "";
+      const status = apiErr?.status ? ` (${apiErr.status})` : "";
+      const msg =
+        (apiErr?.message || "Upload failed.") +
+        status +
+        (detail ? ` — ${detail}` : "");
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.error("[portrait upload] failed", { error: e, file });
+      }
       setUploadError(msg);
       toast.show(msg, "error");
     } finally {
@@ -142,10 +177,11 @@ export default function AccountPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell wide>
       <AppHeader title="Account" />
       <div>
         <ScreenIntro
+          compact
           module="Identity"
           meta={user ? `usr-${user.user_id.slice(0, 6)}` : undefined}
           title={{ top: "YOUR", accent: "PROFILE." }}
@@ -159,28 +195,29 @@ export default function AccountPage() {
         )}
 
         {!user ? (
-          <div className="flex items-center gap-2 text-xs text-tertiary">
+          <div className="flex items-center gap-2 label-mono text-meta text-tertiary">
             <Spinner /> Loading…
           </div>
         ) : (
-          <div className="space-y-4">
-            <Card className="p-5">
-              <PortraitEditor
-                user={user}
-                uploading={uploading}
-                onPick={(f) => void onPickImage(f)}
-                onView={() => setViewerOpen(true)}
-                fileRef={fileRef}
-              />
-              {uploadError && (
-                <div className="mt-3">
-                  <ErrorBanner>{uploadError}</ErrorBanner>
-                </div>
-              )}
-            </Card>
+          <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+            <div className="space-y-4 lg:col-span-7">
+              <Card halo="violet" className="p-5">
+                <PortraitEditor
+                  user={user}
+                  uploading={uploading}
+                  onPick={(f) => void onPickImage(f)}
+                  onView={() => setViewerOpen(true)}
+                  fileRef={fileRef}
+                />
+                {uploadError && (
+                  <div className="mt-3">
+                    <ErrorBanner>{uploadError}</ErrorBanner>
+                  </div>
+                )}
+              </Card>
 
-            <Card className="space-y-3 p-5">
-              <p className="text-sm font-semibold text-primary">Personal details</p>
+              <Card className="space-y-4 p-5">
+              <h2 className="display-sans text-title text-white">Personal details</h2>
 
               <div>
                 <label className="text-caption text-secondary">Name</label>
@@ -201,60 +238,51 @@ export default function AccountPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-caption text-secondary">Date of birth</label>
-                  <Input
-                    className="mt-1"
-                    type="date"
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-caption text-secondary">Gender</label>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {GENDERS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setGender(g)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
-                          gender === g
-                            ? "border-violet-400/60 bg-violet-500/15 text-white"
-                            : "border-white/10 bg-white/5 text-secondary hover:border-white/25"
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
+              <div>
+                <label className="text-caption text-secondary">Date of birth</label>
+                <Input
+                  className="mt-1"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-caption text-secondary">Gender</label>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {GENDERS.map((g) => (
+                    <Chip
+                      key={g}
+                      active={gender === g}
+                      onClick={() => setGender(g)}
+                    >
+                      {g}
+                    </Chip>
+                  ))}
                 </div>
               </div>
 
               <div>
                 <label className="text-caption text-secondary">Ethnicity</label>
-                <div className="mt-1 flex flex-wrap gap-1">
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {ETHNICITIES.map((e) => (
-                    <button
+                    <Chip
                       key={e}
-                      type="button"
+                      active={ethnicity === e}
                       onClick={() => setEthnicity(e)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
-                        ethnicity === e
-                          ? "border-violet-400/60 bg-violet-500/15 text-white"
-                          : "border-white/10 bg-white/5 text-secondary hover:border-white/25"
-                      }`}
                     >
                       {e}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </div>
 
               {saveError && <ErrorBanner>{saveError}</ErrorBanner>}
               {saved && (
-                <p className="text-xs text-emerald-300/80">Profile saved.</p>
+                <p className="label-mono text-meta text-[rgb(var(--mint))]">
+                  Profile saved.
+                </p>
               )}
 
               <div className="flex justify-end">
@@ -264,67 +292,60 @@ export default function AccountPage() {
                 </Button>
               </div>
             </Card>
+            </div>
 
-            <nav className="space-y-2.5">
-              {[
-                { href: "/account/wallet", title: "Wallet", hint: "Custodial wallets" },
-                { href: "/account/rewards", title: "Rewards", hint: "XP, credits & streak" },
-                { href: "/account/vault", title: "Vault", hint: "Encrypted storage" },
-                { href: "/account/redeem", title: "Redeem code", hint: "Activate a campaign code" },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="group relative flex items-center justify-between gap-3 overflow-hidden rounded-2xl border border-white/12 bg-[rgba(18,15,34,0.62)] px-5 py-4 backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color,transform] duration-300 hover:border-[rgb(var(--accent-soft))]/45 hover:bg-[rgba(28,22,52,0.7)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
-                >
-                  {/* Violet halo wash that fades in on hover — same radial
-                      gradient pattern as the legacy Portrait card. */}
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                  >
-                    <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_50%,rgba(123,115,253,0.22)_0%,transparent_60%)]" />
-                  </span>
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/25 to-transparent transition group-hover:via-[rgba(200,170,255,0.6)]"
-                  />
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute left-0 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent opacity-0 transition group-hover:opacity-100"
-                  />
-                  <div className="relative">
-                    <p className="display-sans text-title text-white">{item.title}</p>
-                    <p className="mt-0.5 text-xs text-secondary">{item.hint}</p>
-                  </div>
-                  <span className="relative text-tertiary transition group-hover:translate-x-0.5 group-hover:text-[rgb(var(--accent-soft))]">→</span>
-                </Link>
-              ))}
-            </nav>
-
-            <button
-              type="button"
-              onClick={() => {
-                clearToken();
-                window.location.replace("/login");
-              }}
-              className="group relative mt-8 w-full overflow-hidden rounded-2xl border border-white/12 bg-[rgba(18,15,34,0.62)] py-3.5 label-mono text-meta text-secondary backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color,color] duration-300 hover:border-red-400/70 hover:bg-[rgba(70,18,28,0.78)] hover:text-red-100 hover:shadow-[0_30px_60px_-20px_rgba(255,80,90,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12)]"
-            >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-              >
-                <span className="absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_50%,rgba(255,90,100,0.28)_0%,transparent_65%)]" />
-              </span>
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/25 to-transparent transition group-hover:via-[rgba(255,160,170,0.7)]"
+            <div className="space-y-2.5 lg:col-span-5">
+              <AccountRow
+                title="Wallet"
+                hint={
+                  walletAddress
+                    ? `${walletAddress.slice(0, 8)}…${walletAddress.slice(-6)}`
+                    : walletQ.isLoading
+                      ? "Loading…"
+                      : "Custodial wallet"
+                }
+                disabled={!walletChainUrl}
+                onClick={() => {
+                  if (walletChainUrl)
+                    window.open(walletChainUrl, "_blank", "noopener,noreferrer");
+                }}
               />
-              <span className="relative">Sign out</span>
-            </button>
+              <AccountRow
+                title="BNB Greenfield"
+                hint="Your data"
+                disabled={!walletStorageUrl}
+                onClick={() => {
+                  if (walletStorageUrl)
+                    window.open(walletStorageUrl, "_blank", "noopener,noreferrer");
+                }}
+              />
+              <AccountRow
+                title="Shelby"
+                hint="Your hot storage"
+                badge="Coming soon"
+                disabled
+              />
+              <AccountRow
+                title="Logout"
+                hint="End your session"
+                tone="danger"
+                onClick={() => setLogoutOpen(true)}
+              />
+            </div>
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={confirmLogout}
+        title="Logout"
+        description="You'll need to sign in again to access your legacies."
+        confirmLabel="Yes, logout"
+        cancelLabel="Cancel"
+        icon={<LogoutIcon />}
+      />
 
       {user?.imageUrl && viewerOpen && (
         <PortraitLightbox
@@ -568,5 +589,122 @@ function CameraIcon({ className = "h-5 w-5" }: { className?: string }) {
       />
       <circle cx="12" cy="13" r="3.4" stroke="currentColor" strokeWidth="1.5" />
     </svg>
+  );
+}
+
+function LogoutIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M14 6.5V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 12h11m0 0l-3-3m3 3l-3 3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   AccountRow — full-width nav-style row used by the account menu.
+   ───────────────────────────────────────────────────────────────────
+   Same big display-sans-title look as the legacy Wallet/Rewards rows,
+   but driven by an `onClick` so it can fire arbitrary actions (open a
+   wallet explorer in a new tab, open a confirm modal) rather than just
+   routing. Three tones: default, danger (logout), disabled (Shelby). */
+function AccountRow({
+  title,
+  hint,
+  badge,
+  tone = "default",
+  disabled = false,
+  onClick,
+}: {
+  title: string;
+  hint?: string;
+  badge?: string;
+  tone?: "default" | "danger";
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  const surface =
+    tone === "danger"
+      ? "border-red-400/25 bg-[rgba(70,18,28,0.32)] hover:border-red-400/70 hover:bg-[rgba(82,20,32,0.6)] hover:shadow-[0_30px_60px_-20px_rgba(255,90,100,0.5),inset_0_1px_0_0_rgba(255,255,255,0.10)]"
+      : disabled
+        ? "border-white/10 bg-[rgba(18,15,34,0.55)] opacity-55 cursor-not-allowed"
+        : "border-white/24 bg-[rgba(18,15,34,0.82)] hover:border-[rgb(var(--accent-soft))]/60 hover:bg-[rgba(28,22,52,0.88)] hover:shadow-[0_30px_60px_-20px_rgba(123,115,253,0.5),inset_0_1px_0_0_rgba(255,255,255,0.14)] active:scale-[0.985] active:duration-75 active:bg-[rgba(32,24,58,0.92)]";
+
+  const titleColor =
+    tone === "danger" ? "text-red-200" : "text-white";
+  const haloColor =
+    tone === "danger"
+      ? "bg-[radial-gradient(120%_80%_at_0%_50%,rgba(255,90,100,0.22)_0%,transparent_60%)]"
+      : "bg-[radial-gradient(120%_80%_at_0%_50%,rgba(123,115,253,0.22)_0%,transparent_60%)]";
+  const accentBar =
+    tone === "danger"
+      ? "from-transparent via-red-300 to-transparent"
+      : "from-transparent via-[rgb(var(--accent-soft))] to-transparent";
+
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`group relative block w-full overflow-hidden rounded-2xl border text-left backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.10)] transition-[border-color,box-shadow,background-color,transform] duration-300 ${surface}`}
+    >
+      {!disabled && (
+        <>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+          >
+            <span className={`absolute inset-0 ${haloColor}`} />
+          </span>
+          <span
+            aria-hidden
+            className={`pointer-events-none absolute left-0 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b ${accentBar} opacity-0 transition group-hover:opacity-100`}
+          />
+        </>
+      )}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/25 to-transparent"
+      />
+      <div className="relative flex items-center justify-between gap-3 px-5 py-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className={`display-sans text-title ${titleColor}`}>{title}</p>
+            {badge && (
+              <span className="rounded-full bg-white/10 px-2 py-0.5 label-mono text-[10px] text-tertiary">
+                {badge}
+              </span>
+            )}
+          </div>
+          {hint && (
+            <p className="mt-0.5 truncate text-caption text-secondary">
+              {hint}
+            </p>
+          )}
+        </div>
+        {!disabled && (
+          <span
+            className={`shrink-0 transition group-hover:translate-x-0.5 ${
+              tone === "danger"
+                ? "text-red-300 group-hover:text-red-200"
+                : "text-tertiary group-hover:text-[rgb(var(--accent-soft))]"
+            }`}
+          >
+            →
+          </span>
+        )}
+      </div>
+    </button>
   );
 }

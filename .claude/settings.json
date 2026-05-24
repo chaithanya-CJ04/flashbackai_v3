@@ -19,7 +19,11 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/explore)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/account)",
       "Bash(npx eslint *)",
-      "Bash(node -e \"const ogl = require\\('ogl'\\); console.log\\(Object.keys\\(ogl\\).slice\\(0, 20\\)\\)\")"
+      "Bash(node -e \"const ogl = require\\('ogl'\\); console.log\\(Object.keys\\(ogl\\).slice\\(0, 20\\)\\)\")",
+      "Bash(lsof -iTCP:3000 -sTCP:LISTEN -n -P)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -n -P)",
+      "Bash(awk 'NR==1{p=1} NR==446{p=0} p; /^}$/ && NR>=770 && NR<=775 && !done{p=1; done=1}' /Users/jankutasaichaithanya/Desktop/flashbackai_v3/src/app/explore/page.tsx)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }

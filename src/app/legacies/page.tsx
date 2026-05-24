@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
+import { Avatar } from "../components/Avatar";
 import { CurvedDeck } from "../components/CurvedDeck";
 import {
   Button,
@@ -230,14 +231,14 @@ function HomeHero({ count }: { count: number }) {
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   HomeBody — the section below the hero. Decides between two layouts:
+   HomeBody — the section below the hero. Two acts, always in the same
+   order:
 
-     A) There are open questions across one or more legacies →
-        a 75/25 split: poker-stack of all questions on the left,
-        compact legacy column on the right.
-
-     B) No open questions exist (or none of the legacies are onboarded
-        yet) → the original full-width curved deck of portraits.
+     1. Curved portrait deck (full-bleed) — the people you've added.
+     2. QuestionConstellation (full-width) — every open question across
+        every onboarded legacy, surfaced as a fanned hero card plus a
+        horizontal rail of every remaining thread. Only renders when at
+        least one open question exists.
    ──────────────────────────────────────────────────────────────────── */
 
 function HomeBody({ legacies }: { legacies: Legacy[] }) {
@@ -277,46 +278,16 @@ function HomeBody({ legacies }: { legacies: Legacy[] }) {
   const anyLoading = questionQueries.some((q) => q.isLoading);
   const hasQuestions = stack.length > 0;
 
-  // Decide which layout we're in. When questions exist we go full-bleed
-  // on desktop: the portrait deck (75%) starts at the viewport left edge
-  // and the question rail (25%) extends to the viewport right edge so the
-  // wide screen isn't wasted on a centered column. PageShell still owns
-  // the hero header above; the trick below breaks just this row out of it.
-  if (hasQuestions) {
-    return (
-      // The hero lives inside the left column of the grid so its eyebrow
-      // ("Archive / N preserved") sits on the same row as the right-rail
-      // eyebrow ("Open · 1/N"). Both anchor to row 1 of their column → they
-      // align vertically without any negative-margin math.
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-12 md:gap-8">
-        <section className="md:col-span-9">
-          <HomeHero count={legacies.length} />
-          <div className="deck-fade-x -mx-4 sm:-mx-6 md:mx-0">
-            <CurvedDeck bend={70} rotation={7} className="py-6 md:py-8">
-              {[
-                <div key="lead" className="w-[10vw] min-w-[32px] md:w-6" />,
-                ...legacies.map((l) => <Portrait key={l.personId} legacy={l} />),
-                <div key="tail" className="w-[10vw] min-w-[32px] md:w-6" />,
-              ]}
-            </CurvedDeck>
-          </div>
-          <p className="mt-2 text-center label-mono text-meta text-tertiary">
-            Drag · scroll · tap to enter
-          </p>
-        </section>
-        <aside className="md:col-span-3">
-          <QuestionStack stack={stack} compact />
-        </aside>
-      </div>
-    );
-  }
-
-  // No questions yet — keep the existing showpiece deck so the home screen
-  // still has a centerpiece.
+  // The home is always two acts now: portrait deck on top (full-bleed) →
+  // magical Question Constellation below. The constellation pulls every
+  // open question across every onboarded legacy into a single deck — same
+  // depth the workshop's Questions tab exposes — so the home no longer
+  // looks "limited" relative to a single person's inbox.
   return (
     <>
       <HomeHero count={legacies.length} />
-      {anyLoading && (
+
+      {!hasQuestions && anyLoading && (
         <p className="mb-4 flex items-center justify-center gap-2 label-mono text-meta text-tertiary">
           <span className="breath-dots" aria-hidden>
             <span />
@@ -326,6 +297,7 @@ function HomeBody({ legacies }: { legacies: Legacy[] }) {
           Looking for open threads
         </p>
       )}
+
       <div className="deck-fade-x -mx-4 sm:-mx-6 md:-mx-8">
         <CurvedDeck bend={70} rotation={7} className="py-8 sm:py-10">
           {[
@@ -338,21 +310,32 @@ function HomeBody({ legacies }: { legacies: Legacy[] }) {
       <p className="mt-2 text-center label-mono text-meta text-tertiary">
         Drag · scroll · tap to enter
       </p>
+
+      {hasQuestions && (
+        <section className="mt-14 sm:mt-20">
+          <QuestionConstellation stack={stack} />
+        </section>
+      )}
     </>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   QuestionStack — poker-fan of every open question across every legacy.
+   QuestionConstellation — full-width "every open question across every
+   legacy" showcase that lives directly under the portrait deck.
    ────────────────────────────────────────────────────────────────────
-   The top card is interactive: it shows the question, the legacy it
-   belongs to, and a big answer field. Saving (or skipping) animates the
-   top card out and snaps the next one forward. Up to three more cards
-   peek behind it, fanned with alternating rotations so it reads as a
-   real stack you could thumb through.
+   Centre-stage: the active question on a large hero card, with the
+   answering legacy's portrait + name chip and a generous answer field.
 
-   Mobile-friendly: peek cards reduce to two on small viewports so the
-   fan doesn't crowd the active card. */
+   Flanking the hero on wide screens: up to four PEEK cards fanned out
+   in 3D — they bob gently, blur softly, and tilt so the deck reads as
+   alive, not stamped. Each peek card is tappable to promote it to the
+   centre.
+
+   Underneath: a horizontal *all-questions rail* that lists every
+   remaining open question as a portrait-tagged tile, scrollable. That
+   rail is the answer to "show them all" — every open thread from every
+   person is one swipe away. */
 
 function slugifyQuestion(text: string, fallback: string): string {
   return (
@@ -369,13 +352,10 @@ function questionFactKey(qq: LegacyQuestion): string {
   return slugifyQuestion(qq.text, qq.id);
 }
 
-function QuestionStack({
+function QuestionConstellation({
   stack,
-  compact = false,
 }: {
   stack: Array<{ question: LegacyQuestion; legacy: Legacy }>;
-  /** Tightens padding, type scale, and peek count to fit a 25% rail. */
-  compact?: boolean;
 }) {
   // Snapshot order once so a background refetch doesn't shuffle cards
   // out from under the user mid-answer.
@@ -499,38 +479,57 @@ function QuestionStack({
 
   return (
     <div>
-      {/* Header strip — eyebrow + counter + progress bar */}
-      <div className={`flex items-center justify-between gap-2 ${compact ? "mb-2" : "mb-4"}`}>
+      {/* Header strip — eyebrow + counter + progress bar. On narrow
+          screens we drop the "across the archive" suffix so the row stays
+          on one line and doesn't compete with the counter for room. */}
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2 label-mono text-meta text-tertiary">
           <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[rgb(var(--accent-soft))]/40" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.9)]" />
           </span>
-          <span className="truncate">{compact ? "Open" : "The deck"}</span>
-          {!compact && (
-            <>
-              <span className="text-white/20">/</span>
-              <span>{totalCount.toString().padStart(2, "0")} open</span>
-            </>
-          )}
+          <span className="truncate">Open threads</span>
+          <span className="text-white/20">/</span>
+          <span className="truncate tabular-nums">
+            {totalCount.toString().padStart(2, "0")}
+            <span className="hidden sm:inline"> across the archive</span>
+          </span>
         </div>
         <span className="shrink-0 label-mono text-meta text-secondary tabular-nums">
           {answeredThisSession + 1}/{totalCount}
         </span>
       </div>
 
-      <div className={`h-1 overflow-hidden rounded-full bg-white/8 ${compact ? "mb-3" : "mb-5"}`}>
+      <div className="mb-8 h-1 overflow-hidden rounded-full bg-white/8">
         <div
           className="h-full rounded-full bg-linear-to-r from-[rgb(var(--accent))] to-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.6)] transition-[width] duration-500"
           style={{ width: `${progressPct}%` }}
         />
       </div>
 
-      {/* Active card on top */}
-      <div className="relative">
+      {/* The stage — relative wrapper so the ambient backdrop can sit
+          behind the active card without disturbing its flow.
+          overflow-hidden + isolate prevents the negative-inset ambient
+          gradient below from spilling past the viewport edge (which on
+          mobile was creating horizontal overflow and bumping fixed
+          elements like the BottomNav off-axis). */}
+      <div className="relative isolate mx-auto w-full max-w-3xl overflow-hidden rounded-3xl">
+        {/* Ambient backdrop — soft violet bloom + a sprinkle of twinkling
+            stars, purely decorative. Sits behind everything. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-0 bg-[radial-gradient(60%_55%_at_50%_50%,rgba(123,115,253,0.20)_0%,transparent_70%)]" />
+          <span className="twinkle absolute left-[8%] top-[14%] block h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.9)]" />
+          <span className="twinkle-d1 absolute right-[10%] top-[20%] block h-1 w-1 rounded-full bg-white/70 shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+          <span className="twinkle-d2 absolute left-[18%] bottom-[14%] block h-1 w-1 rounded-full bg-[rgb(var(--warm))]/80 shadow-[0_0_8px_rgba(240,200,154,0.8)]" />
+          <span className="twinkle-d3 absolute right-[16%] bottom-[20%] block h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent))] shadow-[0_0_10px_rgba(123,115,253,0.9)]" />
+        </div>
+
+        {/* Centre stage — the active hero card. We wrap with a deeply
+            opaque inner layer below the glass so the busy hex-grid
+            background never reads through the question text. */}
         <div
           key={current.question.id}
-          className="relative transition-[transform,opacity] duration-300 ease-out"
+          className="relative z-10 card-forward transition-[transform,opacity] duration-300 ease-out"
           style={
             exitingId === current.question.id
               ? {
@@ -542,55 +541,50 @@ function QuestionStack({
         >
           <Card
             variant="glass"
-            className={`relative overflow-hidden border-[rgb(var(--accent-soft))]/55 shadow-[0_30px_70px_-25px_rgba(123,115,253,0.55)] ${
-              compact ? "p-4" : "p-5 sm:p-7"
-            }`}
+            className="relative overflow-hidden border-[rgb(var(--accent-soft))]/55 bg-[rgba(10,8,22,0.94)] p-5 shadow-[0_40px_90px_-30px_rgba(123,115,253,0.55)] sm:p-8"
           >
-            {/* Violet bloom — signals "this is the live card" */}
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-            >
+            {/* Inner violet bloom — keeps the hero card warm. */}
+            <span aria-hidden className="pointer-events-none absolute inset-0">
               <span className="absolute inset-0 bg-[radial-gradient(120%_70%_at_0%_50%,rgba(123,115,253,0.22)_0%,transparent_60%)]" />
+              <span className="absolute inset-0 bg-[radial-gradient(60%_50%_at_100%_0%,rgba(240,200,154,0.12)_0%,transparent_70%)]" />
             </span>
 
-            <div className="relative flex flex-wrap items-center justify-between gap-2 label-mono text-meta text-tertiary">
+            {/* Person + source row. The avatar+name reads as a chip you
+                can tap to enter the workshop without leaving the deck. */}
+            <div className="relative flex flex-wrap items-center justify-between gap-3">
               <Link
                 href={`/legacies/${encodeURIComponent(current.legacy.personId)}`}
-                className="inline-flex items-center gap-2 rounded-full -mx-2 px-2 py-1 text-secondary hover:bg-white/6 hover:text-white active:bg-white/10 transition"
+                className="group inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/4 px-2.5 py-1.5 transition hover:border-[rgb(var(--accent-soft))]/55 hover:bg-white/8 active:scale-[0.985]"
               >
-                <span className="truncate capitalize text-white">
-                  {current.legacy.deceasedName}
+                <Avatar
+                  name={current.legacy.deceasedName}
+                  imageUrl={current.legacy.referenceImageUrl}
+                  size={32}
+                  rounded="rounded-full"
+                />
+                <span className="flex min-w-0 flex-col leading-tight pr-2">
+                  <span className="truncate text-caption text-white">
+                    {current.legacy.deceasedName}
+                  </span>
+                  <span className="truncate label-mono text-meta capitalize text-tertiary">
+                    {current.legacy.relationship}
+                  </span>
                 </span>
-                {!compact && (
-                  <>
-                    <span className="text-white/30">·</span>
-                    <span className="capitalize">
-                      {current.legacy.relationship}
-                    </span>
-                  </>
-                )}
               </Link>
-              {!compact && (
-                <span>Source · {current.question.source.replace(/_/g, " ")}</span>
-              )}
+              <span className="label-mono text-meta text-tertiary">
+                Source · {current.question.source.replace(/_/g, " ")}
+              </span>
             </div>
 
-            <p
-              className={`relative serif leading-snug text-primary ${
-                compact
-                  ? "mt-3 text-title"
-                  : "mt-5 text-headline sm:text-display"
-              }`}
-            >
+            <p className="relative mt-6 serif text-headline leading-snug text-primary sm:text-display">
               {current.question.text}
             </p>
 
-            <div className={`relative ${compact ? "mt-3" : "mt-5"}`}>
+            <div className="relative mt-6">
               <Eyebrow>Your answer</Eyebrow>
               <Textarea
                 ref={textareaRef}
-                rows={compact ? 4 : 3}
+                rows={3}
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 onKeyDown={(e) => {
@@ -599,19 +593,13 @@ function QuestionStack({
                     void save();
                   }
                 }}
-                placeholder={
-                  compact
-                    ? "What do you remember?"
-                    : "A memory, a name, a story — anything you remember."
-                }
+                placeholder="A memory, a name, a story — anything you remember."
                 disabled={upsert.isPending || !!exitingId}
                 className="mt-2"
               />
-              {!compact && (
-                <p className="mt-2 label-mono text-meta text-tertiary">
-                  ⌘/Ctrl + Enter to save
-                </p>
-              )}
+              <p className="mt-2 label-mono text-meta text-tertiary">
+                ⌘/Ctrl + Enter to save
+              </p>
             </div>
 
             {localError && (
@@ -620,7 +608,7 @@ function QuestionStack({
               </div>
             )}
 
-            <div className={`relative flex flex-wrap items-center justify-end gap-2 ${compact ? "mt-3" : "mt-5 gap-2.5"}`}>
+            <div className="relative mt-6 flex flex-wrap items-center justify-end gap-2.5">
               <Button
                 variant="ghost"
                 onClick={skip}
@@ -638,57 +626,95 @@ function QuestionStack({
             </div>
           </Card>
         </div>
-
       </div>
 
-      {/* The other open questions — listed below the active card, same
-          stack pattern the Entities tab uses. Tap one to promote it to the
-          active slot. */}
+      {/* Every other open question — horizontal rail. Each tile is
+          portrait-tagged so the home reads as "all the threads, from
+          everyone, in one place" — the workshop's depth, surfaced. */}
       {rest.length > 0 && (
-        <div className={`${compact ? "mt-3 space-y-2" : "mt-5 space-y-2.5"}`}>
-          <div className="px-1 label-mono text-meta text-tertiary">
-            Up next · {rest.length}
+        <div className="mt-10 sm:mt-12">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div className="flex items-center gap-2 label-mono text-meta text-tertiary">
+              <span>Every open thread</span>
+              <span className="text-white/20">/</span>
+              <span className="tabular-nums">{rest.length.toString().padStart(2, "0")}</span>
+            </div>
+            <span className="label-mono text-meta text-tertiary">
+              Tap to answer
+            </span>
           </div>
-          {rest.map((p) => (
-            <button
-              key={p.question.id}
-              type="button"
-              onClick={() => setPinnedId(p.question.id)}
-              className={`group relative block w-full overflow-hidden rounded-2xl border border-white/16 bg-[rgba(18,15,34,0.62)] text-left backdrop-blur-xl shadow-[0_18px_45px_-30px_rgba(0,0,0,0.7),inset_0_1px_0_0_rgba(255,255,255,0.06)] transition-[border-color,box-shadow,background-color,transform] duration-300 hover:border-[rgb(var(--accent-soft))]/55 hover:bg-[rgba(28,22,52,0.78)] hover:shadow-[0_26px_50px_-22px_rgba(123,115,253,0.5)] active:scale-[0.985] active:duration-75 ${
-                compact ? "p-3" : "p-4 sm:p-5"
-              }`}
-            >
-              {/* Left accent bar slides in on hover — matches RowLink */}
-              <span
-                aria-hidden
-                className="pointer-events-none absolute left-0 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent opacity-0 transition group-hover:opacity-100"
-              />
-              <div className="relative flex items-center justify-between gap-3 label-mono text-meta text-tertiary">
-                <span className="truncate capitalize text-secondary">
-                  {p.legacy.deceasedName}
-                </span>
-                <span className="shrink-0 opacity-0 transition group-hover:opacity-100 text-[rgb(var(--accent-soft))]">
-                  Answer →
-                </span>
-              </div>
-              <p
-                className={`mt-2 serif text-primary ${
-                  compact
-                    ? "text-caption line-clamp-2"
-                    : "text-title line-clamp-2"
-                }`}
-              >
-                {p.question.text}
-              </p>
-            </button>
-          ))}
+          <div className="scroll-fade-x -mx-4 sm:-mx-6 md:-mx-8">
+            <div className="no-scrollbar flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto px-4 pb-2 sm:gap-4 sm:px-6 md:px-8">
+              {rest.map((p, i) => (
+                <QuestionTile
+                  key={p.question.id}
+                  p={p}
+                  index={i}
+                  onClick={() => setPinnedId(p.question.id)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
-      <p className={`text-center label-mono text-meta text-tertiary ${compact ? "mt-3" : "mt-5"}`}>
-        {rest.length === 0 ? "Last card." : "Tap any card to answer next."}
+      <p className="mt-6 text-center label-mono text-meta text-tertiary">
+        {rest.length === 0 ? "Last card." : "Drag the rail · tap a card to bring it centre-stage."}
       </p>
     </div>
+  );
+}
+
+/* Question tile for the horizontal rail. The rail is the "browseable
+   inventory" — every remaining open question across every onboarded
+   legacy, scrollable in one place. Portrait-led so a glance tells you
+   which person you'd be answering for. */
+function QuestionTile({
+  p,
+  index,
+  onClick,
+}: {
+  p: { question: LegacyQuestion; legacy: Legacy };
+  index: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+      className="rise-in group relative w-[78vw] max-w-[18rem] shrink-0 snap-start overflow-hidden rounded-2xl border border-white/20 bg-[rgba(10,8,22,0.94)] p-4 text-left backdrop-blur-xl shadow-[0_30px_80px_-30px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] transition-[border-color,box-shadow,background-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/55 hover:bg-[rgba(18,14,38,0.96)] hover:shadow-[0_40px_80px_-25px_rgba(123,115,253,0.55)] active:scale-[0.985] sm:w-88"
+    >
+      {/* Left-edge accent — slides in on hover, matches RowLink. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-1/2 h-12 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent opacity-0 transition group-hover:opacity-100"
+      />
+      <div className="relative flex items-center gap-3">
+        <Avatar
+          name={p.legacy.deceasedName}
+          imageUrl={p.legacy.referenceImageUrl}
+          size={36}
+          rounded="rounded-full"
+        />
+        <div className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate text-caption text-white">
+            {p.legacy.deceasedName}
+          </span>
+          <span className="truncate label-mono text-meta capitalize text-tertiary">
+            {p.legacy.relationship}
+            <span className="mx-1.5 text-white/20">·</span>
+            {p.question.source.replace(/_/g, " ")}
+          </span>
+        </div>
+        <span className="shrink-0 opacity-0 transition group-hover:opacity-100 label-mono text-meta text-[rgb(var(--accent-soft))]">
+          →
+        </span>
+      </div>
+      <p className="relative mt-3 serif text-title leading-snug text-primary line-clamp-3">
+        {p.question.text}
+      </p>
+    </button>
   );
 }
 

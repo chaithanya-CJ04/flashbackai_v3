@@ -104,16 +104,17 @@ export default function ConversationPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [session?.status]);
 
-  // When a new turn arrives, scroll the latest message to the END (just above
-  // the fixed composer) — not "center", which previously yanked the page
-  // around and made the composer feel out of reach.
+  // When a new turn arrives, scroll the page to the bottom. The spacer below
+  // the scroller is sized to match the fixed composer, so landing at page
+  // bottom puts the freshly added message right above the composer. Using
+  // scrollIntoView on the last child instead lands it *behind* the composer
+  // because that element doesn't know about the fixed overlay.
   useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const lastChild = el.lastElementChild as HTMLElement | null;
-    if (lastChild) {
-      lastChild.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
+    if (!scrollerRef.current) return;
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
   }, [turnsQ.data, pendingUserMessage]);
 
   const handleSend = async (e?: FormEvent) => {
@@ -209,83 +210,53 @@ export default function ConversationPage({
   const isOpen = session?.status === "open";
   const isWrapped = session?.status === "wrapped";
 
+  const statusBadge = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 label-mono text-meta text-secondary">
+      <span
+        className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+          isOpen
+            ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]"
+            : isWrapped
+              ? "bg-[rgb(var(--warm))] shadow-[0_0_10px_rgba(240,200,154,0.7)]"
+              : "bg-white/40"
+        }`}
+      >
+        {isOpen && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300/40" />
+        )}
+      </span>
+      <span>
+        {isWrapped ? "Archived" : isOpen ? "Live · in progress" : "Loading"}
+      </span>
+      {session && (
+        <>
+          <span className="text-white/30">/</span>
+          <span>
+            {session.turnCount} turn{session.turnCount === 1 ? "" : "s"}
+          </span>
+          {session.openedAt && (
+            <>
+              <span className="text-white/30">/</span>
+              <span>opened {relativeTime(session.openedAt)}</span>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+
   return (
-    <PageShell>
+    <PageShell wide>
       <AppHeader
         back={`/legacies/${encodeURIComponent(personId)}`}
         title={firstName ? `with ${firstName}` : "Conversation"}
       />
 
-      {/* Editorial intro — readout strip + display headline, no Card wrapper */}
-      <section className="mb-8 sm:mb-10">
-        <div className="flex items-center gap-3 label-mono text-meta text-secondary">
-          <span
-            className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-              isOpen
-                ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]"
-                : isWrapped
-                  ? "bg-[rgb(var(--warm))] shadow-[0_0_10px_rgba(240,200,154,0.7)]"
-                  : "bg-white/40"
-            }`}
-          >
-            {isOpen && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300/40" />
-            )}
-          </span>
-          <span>
-            {isWrapped
-              ? "Archived"
-              : isOpen
-                ? "Live · in progress"
-                : "Loading"}
-          </span>
-          {session && (
-            <>
-              <span className="text-white/30">/</span>
-              <span>
-                {session.turnCount} turn{session.turnCount === 1 ? "" : "s"}
-              </span>
-              {session.openedAt && (
-                <>
-                  <span className="text-white/30">/</span>
-                  <span>opened {relativeTime(session.openedAt)}</span>
-                </>
-              )}
-            </>
-          )}
-        </div>
-        <h1 className="display-sans text-display mt-5 leading-[0.92] text-white">
-          {isWrapped ? (
-            <>
-              LOOKING
-              <br />
-              <span
-                className="bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(180deg, rgba(var(--warm),1) 0%, rgba(var(--warm-deep),1) 100%)",
-                }}
-              >
-                BACK.
-              </span>
-            </>
-          ) : (
-            <>
-              TELL ME
-              <br />
-              <span
-                className="bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(180deg, rgba(var(--accent-soft),1) 0%, rgba(var(--accent),1) 100%)",
-                }}
-              >
-                MORE.
-              </span>
-            </>
-          )}
-        </h1>
-      </section>
+      {/* Mobile-only compact status strip. Replaces the big "TELL ME MORE."
+          editorial headline on phones so the chat thread sits above the
+          fold instead of being pushed below a hero. The full editorial
+          treatment lives in the desktop left rail (aside) below. */}
+      <div className="mb-4 lg:hidden">{statusBadge}</div>
 
       {error && (
         <div className="mb-6">
@@ -293,11 +264,50 @@ export default function ConversationPage({
         </div>
       )}
 
-      {/* Two-column editorial split on lg+ — metadata on the left rail,
-          conversation thread on the right. Mobile stacks them. */}
+      {/* Two-column editorial split on lg+ — sticky editorial rail on the
+          left, the conversation thread on the right. Mobile stacks them
+          (and skips the big headline entirely via lg:block). */}
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-14">
         <aside className="lg:col-span-4">
           <div className="lg:sticky lg:top-6 space-y-7">
+            {/* Editorial intro — only the desktop rail shows the big
+                "TELL ME MORE." / "LOOKING BACK." headline; mobile already
+                has the compact status strip above the thread. */}
+            <section className="hidden lg:block">
+              {statusBadge}
+              <h1 className="display-sans text-display mt-5 leading-[0.92] text-white">
+                {isWrapped ? (
+                  <>
+                    LOOKING
+                    <br />
+                    <span
+                      className="bg-clip-text text-transparent"
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(180deg, rgba(var(--warm),1) 0%, rgba(var(--warm-deep),1) 100%)",
+                      }}
+                    >
+                      BACK.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    TELL ME
+                    <br />
+                    <span
+                      className="bg-clip-text text-transparent"
+                      style={{
+                        backgroundImage:
+                          "linear-gradient(180deg, rgba(var(--accent-soft),1) 0%, rgba(var(--accent),1) 100%)",
+                      }}
+                    >
+                      MORE.
+                    </span>
+                  </>
+                )}
+              </h1>
+            </section>
+
             {isWrapped && session?.sessionSummary && (
               <div>
                 <p className="eyebrow">Summary</p>
@@ -422,9 +432,14 @@ export default function ConversationPage({
           </div>
         </aside>
 
-        {/* Right: the conversation thread */}
+        {/* Right: the conversation thread. Constrained to a readable
+            reading width inside the wide column so lines don't span the
+            full canvas — chat copy past ~80ch is hard to track. */}
         <div className="lg:col-span-8">
-          <div ref={scrollerRef} className="space-y-8 sm:space-y-10">
+          <div
+            ref={scrollerRef}
+            className="mx-auto w-full max-w-3xl space-y-8 sm:space-y-10"
+          >
             {turnsQ.isLoading ? (
               <div className="flex items-center gap-3 text-body text-secondary">
                 <Spinner /> Loading conversation
@@ -456,17 +471,19 @@ export default function ConversationPage({
         </div>
       </div>
 
-      {/* Reserve vertical space so the fixed composer never sits on top of
-          the last assistant reply. Tuned to composer height + breathing room. */}
-      {isOpen && <div aria-hidden className="h-56 sm:h-60" />}
+      {/* Reserve vertical space so the fixed composer never sits on top
+          of the last assistant reply. Smaller on mobile so the thread
+          uses more of the visible viewport above the keyboard. */}
+      {isOpen && <div aria-hidden className="h-40 sm:h-56" />}
 
-      {/* Composer — fixed to the viewport so it never unpins on short pages
-          or when scrolling reaches the bottom of its grid column. Higher than
-          the (hidden) BottomNav so there's no z-index fight. */}
+      {/* Composer — fixed to the viewport so it never unpins on short
+          pages. Tight padding + smaller textarea on mobile so the input
+          feels chat-app-native (sits flush near the bottom edge); roomier
+          on desktop where there's more space to breathe. */}
       {isOpen && (
         <form
           onSubmit={handleSend}
-          className="fixed inset-x-0 bottom-0 z-30 px-4 pt-10 pb-safe sm:px-6 sm:pt-12 md:px-8"
+          className="fixed inset-x-0 bottom-0 z-30 px-3 pt-6 pb-safe sm:px-6 sm:pt-12 md:px-8"
           style={{
             background:
               "linear-gradient(180deg, rgba(8, 7, 20, 0) 0%, rgba(8, 7, 20, 0.7) 30%, rgba(8, 7, 20, 0.95) 70%)",
@@ -474,7 +491,7 @@ export default function ConversationPage({
         >
           <div className="mx-auto w-full max-w-3xl">
             <div
-              className="rounded-2xl border-2 border-white/28 p-4 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] sm:rounded-3xl"
+              className="rounded-2xl border-2 border-white/28 p-3 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] sm:rounded-3xl sm:p-4"
               style={{
                 background:
                   "linear-gradient(180deg, rgba(20, 16, 38, 0.96) 0%, rgba(10, 8, 22, 0.98) 100%)",
@@ -482,7 +499,7 @@ export default function ConversationPage({
             >
               <Textarea
                 ref={textareaRef}
-                rows={2}
+                rows={1}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -494,9 +511,9 @@ export default function ConversationPage({
                 placeholder="A memory. A moment. Anything."
                 disabled={sendTurn.isPending}
                 autoFocus
-                className="border-0 bg-transparent px-1 py-1 text-body shadow-none focus:bg-transparent focus:shadow-none"
+                className="border-0 bg-transparent px-1 py-1 text-body shadow-none sm:rows-2 focus:bg-transparent focus:shadow-none"
               />
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/22 pt-3">
+              <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/22 pt-2 sm:mt-3 sm:pt-3">
                 <p className="hidden text-caption text-secondary sm:block">
                   Enter to send · Shift+Enter for a new line
                 </p>
@@ -564,7 +581,7 @@ function Line({
             <BreathDots /> Listening
           </span>
         ) : (
-          <p className="serif whitespace-pre-wrap text-headline leading-relaxed text-primary">
+          <p className="whitespace-pre-wrap text-title leading-relaxed text-primary">
             {text}
           </p>
         )}
