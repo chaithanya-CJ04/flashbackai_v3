@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import {
   activationApi,
+  ApiError,
   legacyApi,
   metricsApi,
   rewardsApi,
@@ -279,8 +280,22 @@ export function useSendTurn(personId: string, sessionId: string) {
 export function useWrapSession(personId: string, sessionId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => legacyApi.wrapSession(personId, sessionId),
+    mutationFn: async () => {
+      try {
+        return await legacyApi.wrapSession(personId, sessionId);
+      } catch (err) {
+        // 409 means the session was already wrapped server-side — likely a
+        // stale client cache or a parallel wrap. Treat as a no-op success:
+        // refresh the sessions list so the UI reflects the actual state.
+        if (err instanceof ApiError && err.status === 409) {
+          await qc.invalidateQueries({ queryKey: qk.sessions(personId) });
+          return null;
+        }
+        throw err;
+      }
+    },
     onSuccess: (data) => {
+      if (!data) return;
       qc.setQueryData<LegacySession[]>(qk.sessions(personId), (prev) =>
         prev
           ? prev.map((s) => (s.sessionId === sessionId ? data.item : s))

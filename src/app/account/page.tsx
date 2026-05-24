@@ -156,7 +156,7 @@ export default function AccountPage() {
       const msg =
         (apiErr?.message || "Upload failed.") +
         status +
-        (detail ? ` — ${detail}` : "");
+        (detail ? `: ${detail}` : "");
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
         console.error("[portrait upload] failed", { error: e, file });

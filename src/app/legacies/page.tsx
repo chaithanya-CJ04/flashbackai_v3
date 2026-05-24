@@ -223,7 +223,7 @@ function HomeHero({ count }: { count: number }) {
         </span>
       </h1>
       <p className="mt-5 max-w-md text-body text-secondary">
-        A private archive for the people who shaped you. Drag to browse — tap
+        A private archive for the people who shaped you. Drag to browse, tap
         a portrait to step into their story.
       </p>
     </section>
@@ -593,7 +593,7 @@ function QuestionConstellation({
                     void save();
                   }
                 }}
-                placeholder="A memory, a name, a story — anything you remember."
+                placeholder="A memory, a name, a story, anything you remember."
                 disabled={upsert.isPending || !!exitingId}
                 className="mt-2"
               />

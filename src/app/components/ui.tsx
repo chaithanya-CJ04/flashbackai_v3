@@ -1278,14 +1278,33 @@ export function ConfirmDialog({
           </div>
         </div>
 
+        {/* Dialog action row — both buttons share the same dimensions
+            (px-6 py-3, text-caption, rounded-full) so the cancel/confirm
+            pair reads as a balanced choice rather than a giant primary
+            next to a tiny ghost. The primary keeps its violet bloom; the
+            cancel is the same shape in a quieter palette. */}
         <div className="mt-5 flex items-center justify-end gap-2.5 sm:mt-6">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/22 bg-white/4 px-6 py-3 text-caption font-medium text-secondary transition hover:border-white/40 hover:bg-white/8 hover:text-white active:scale-[0.97] active:duration-75 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {cancelLabel}
-          </Button>
-          <Button onClick={onConfirm} disabled={busy}>
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full border border-[rgb(var(--accent-soft))]/55 px-6 py-3 text-caption font-medium text-white shadow-[0_12px_40px_-10px_rgba(123,115,253,0.55),0_0_60px_-10px_rgba(180,173,255,0.35)] transition active:scale-[0.97] active:duration-75 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, transparent 18%), linear-gradient(180deg, rgba(var(--accent),0.95) 0%, rgba(var(--accent-deep),1) 100%)",
+            }}
+          >
             {busy && <Spinner />}
             {confirmLabel}
-          </Button>
+          </button>
         </div>
       </div>
 

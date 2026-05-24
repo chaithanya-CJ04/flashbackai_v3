@@ -29,7 +29,7 @@ const TAGLINE = "A private archive for the people who shaped you.";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Flashback — A place to keep someone close",
+    default: "Flashback: A place to keep someone close",
     template: "%s · Flashback",
   },
   description: TAGLINE,
@@ -52,14 +52,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "Flashback",
-    title: "Flashback — A place to keep someone close",
+    title: "Flashback: A place to keep someone close",
     description: TAGLINE,
     url: SITE_URL,
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Flashback — A place to keep someone close",
+    title: "Flashback: A place to keep someone close",
     description: TAGLINE,
   },
   appleWebApp: {

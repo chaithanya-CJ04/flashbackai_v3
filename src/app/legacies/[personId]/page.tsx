@@ -520,7 +520,7 @@ function BadgesSection({
         title="Badges"
         hint={
           selectedThemeId
-            ? "Showing moments tied to the selected badge — tap again to clear."
+            ? "Showing moments tied to the selected badge. Tap again to clear."
             : "Tap a badge to filter the gallery."
         }
         action={
@@ -728,7 +728,7 @@ function GallerySection({
           }
           hint={
             selectedThemeId
-              ? "Try another badge — or share more stories below to deepen this one."
+              ? "Try another badge, or share more stories below to deepen this one."
               : "Stories shared in conversations crystallise into moments here."
           }
         />
@@ -1306,7 +1306,7 @@ function FactsTab({
       {facts.length === 0 ? (
         <EmptyState
           title="No facts on file."
-          hint="Facts surface through conversation — or write one yourself."
+          hint="Facts surface through conversation, or write one yourself."
         />
       ) : (
         <Card className="overflow-hidden">

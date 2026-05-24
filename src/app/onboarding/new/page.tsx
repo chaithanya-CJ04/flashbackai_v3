@@ -41,7 +41,7 @@ const STEPS: StepMeta[] = [
     module: "reference",
     headTop: "First,",
     headAccent: "their face.",
-    hint: "One clear photo so we can recognise them inside the moments you'll later share. Optional — you can skip and add later.",
+    hint: "One clear photo so we can recognise them inside the moments you'll later share. Optional: you can skip and add later.",
   },
   {
     id: "details",
@@ -59,7 +59,7 @@ const STEPS: StepMeta[] = [
     module: "who they were",
     headTop: "And",
     headAccent: "who they were.",
-    hint: "Pick what feels closest. There's no wrong answer — and you can skip any you're unsure about.",
+    hint: "Pick what feels closest. There's no wrong answer, and you can skip any you're unsure about.",
   },
 ];
 

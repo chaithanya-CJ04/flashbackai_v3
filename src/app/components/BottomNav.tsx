@@ -177,12 +177,26 @@ export function BottomNav() {
               href={item.href}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              className={`relative flex basis-0 grow flex-col items-center gap-1 rounded-full px-1 py-1.5 transition active:scale-[0.94] active:duration-75 ${
-                active
-                  ? "bg-white/10 text-white"
-                  : "text-secondary hover:bg-white/5 hover:text-white active:bg-white/8"
+              // min-w-0 lets the item shrink below its content min-width
+              // when the pill is narrow, so all 5 children always fit
+              // inside max-w-md and the pill never overflows the viewport.
+              className={`group relative flex basis-0 min-w-0 grow flex-col items-center gap-1 px-1 py-1.5 transition active:scale-[0.94] active:duration-75 ${
+                active ? "text-white" : "text-secondary hover:text-white"
               }`}
             >
+              {/* Active / hover highlight as an absolute layer so it
+                  contributes zero width to the item. inset-x-1 inset-y-0
+                  gives the pill a 4px breathing margin on each side, so
+                  edge items (Home / You) never let the highlight run
+                  into the outer pill's rounded arc. */}
+              <span
+                aria-hidden
+                className={`pointer-events-none absolute inset-x-1 inset-y-0 rounded-full transition-colors duration-200 ${
+                  active
+                    ? "bg-white/10"
+                    : "bg-transparent group-hover:bg-white/5 group-active:bg-white/8"
+                }`}
+              />
               {/* Active indicator — a small violet dot above the icon so
                   the user always knows where they are even without
                   contrast on the label. */}
@@ -192,8 +206,8 @@ export function BottomNav() {
                   className="pointer-events-none absolute -top-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_8px_rgba(180,173,255,0.9)]"
                 />
               )}
-              {item.icon}
-              <span className="label-mono text-[11px] font-medium leading-tight">
+              <span className="relative">{item.icon}</span>
+              <span className="relative label-mono text-[11px] font-medium leading-tight truncate max-w-full">
                 {item.label}
               </span>
             </Link>

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { ogLogoDataUrl } from "./_brand/og-logo";
 
-export const alt = "Flashback — A private archive for the people who shaped you.";
+export const alt = "Flashback: A private archive for the people who shaped you.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

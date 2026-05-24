@@ -192,7 +192,7 @@ export default function RewardsPage() {
           ) : !Array.isArray(txs) || txs.length === 0 ? (
             <EmptyState
               title="Nothing to claim"
-              hint="Keep showing up — actions like sessions, login streaks, and milestones generate claimable rewards."
+              hint="Keep showing up. Actions like sessions, login streaks, and milestones generate claimable rewards."
             />
           ) : (
             <div className="space-y-2">

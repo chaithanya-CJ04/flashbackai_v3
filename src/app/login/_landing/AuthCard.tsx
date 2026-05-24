@@ -852,7 +852,7 @@ export default function AuthCard() {
           // too long to approve in the wallet, transparently request a
           // fresh challenge and sign once more.
           if (code === "challenge_expired" && !cancelled) {
-            setError("Sign-in window expired — please approve once more.");
+            setError("Sign-in window expired. Please approve once more.");
             data = await attempt();
             setError(null);
           } else {
@@ -1042,7 +1042,7 @@ export default function AuthCard() {
       } catch (err: unknown) {
         const code = (err as { code?: string } | null)?.code;
         if (code === "challenge_expired") {
-          setError("Sign-in window expired — please approve once more.");
+          setError("Sign-in window expired. Please approve once more.");
           data = await attemptEvm();
           setError(null);
         } else {

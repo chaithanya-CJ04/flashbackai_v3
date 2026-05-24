@@ -255,7 +255,7 @@ export default function ThemeDetailPage({
                     </div>
                   ))}
                   <p className="text-caption text-tertiary">
-                    Selecting answers happens locally for now — submitting these
+                    Selecting answers happens locally for now. Submitting these
                     to fully unlock the theme isn&apos;t wired yet. Use this to
                     preview the question set.
                   </p>
