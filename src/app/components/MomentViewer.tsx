@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import LightRays from "./LightRays";
+import { MediaImg } from "./MediaImg";
 import { AuthedVideo } from "./VideoLightbox";
 
 export type ViewerMoment = {
@@ -364,12 +365,13 @@ export function MomentViewer({
                     muted
                   />
                 ) : hasThumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={current.thumbnailUrl!}
-                    alt={current.title ?? "Moment"}
-                    className="viewer-kenburns block max-h-[58vh] w-full object-cover"
-                  />
+                  <div className="relative aspect-4/3 w-full">
+                    <MediaImg
+                      src={current.thumbnailUrl!}
+                      alt={current.title ?? "Moment"}
+                      className="viewer-kenburns absolute inset-0 block h-full max-h-[58vh] w-full object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="flex aspect-[4/3] w-full items-center justify-center bg-linear-to-br from-[rgb(var(--accent))]/30 via-[rgb(var(--accent-deep))]/25 to-black/60 p-8 text-center">
                     <p className="serif text-headline text-primary">
@@ -757,19 +759,16 @@ export function MomentTile({
       className={`group relative aspect-square overflow-hidden bg-black/40 transition ${className}`}
     >
       {hasThumb ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={moment.thumbnailUrl!}
-            alt={moment.title ?? "Moment"}
-            draggable={false}
-            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-            onError={(e) => {
-              // Hide broken image; reveal the gradient fallback that's already in the DOM.
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-        </>
+        <MediaImg
+          src={moment.thumbnailUrl!}
+          alt={moment.title ?? "Moment"}
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+          onError={(e) => {
+            // Hide broken image; reveal the gradient fallback that's already in the DOM.
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
       ) : (
         <div className="absolute inset-0 flex items-end bg-linear-to-br from-[rgb(var(--accent))]/30 via-[rgb(var(--accent-deep))]/25 to-black/60 p-3 text-left">
           <p className="display-sans line-clamp-3 text-sm leading-snug text-primary sm:text-base">

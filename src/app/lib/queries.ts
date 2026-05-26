@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   useMutation,
   useQuery,
@@ -264,6 +266,75 @@ export function useStartSession(personId: string) {
   });
 }
 
+/* Open (or start) a conversation with a particular person, optionally
+   seeding the composer with a question. Centralised so the workshop's
+   Questions tab and the home page's question rail share the same logic:
+   reuse the live "open" session if one exists, otherwise mint a new one.
+   The `pendingPersonId` value lets the caller put a spinner on the row
+   the user actually tapped, even when multiple are on screen. */
+export function useOpenConversationFor() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [pendingPersonId, setPendingPersonId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const open = useCallback(
+    async (personId: string, prompt?: string) => {
+      setError(null);
+      setPendingPersonId(personId);
+      try {
+        let sessions = qc.getQueryData<LegacySession[]>(qk.sessions(personId));
+        if (!sessions) {
+          const r = await legacyApi.listSessions(personId, 25);
+          sessions = r.items;
+          qc.setQueryData(qk.sessions(personId), sessions);
+        }
+        // Pick the freshest open session — backend can leave several
+        // "open" sessions lying around when previous attempts orphaned
+        // without a turn. We sort by lastTurnAt (or openedAt fallback)
+        // descending and prefer the most recently touched.
+        const openSessions = (sessions ?? [])
+          .filter((s) => s.status === "open")
+          .sort((a, b) => {
+            const at = new Date(a.lastTurnAt ?? a.openedAt).getTime();
+            const bt = new Date(b.lastTurnAt ?? b.openedAt).getTime();
+            return bt - at;
+          });
+        // A session with zero turns that was opened more than a day ago
+        // is almost certainly a ghost the backend will refuse turns on
+        // (we've seen 6-day-old empty "open" sessions return 409). Skip
+        // it and mint a fresh one rather than handing the user a dead
+        // conversation.
+        const GHOST_AFTER_MS = 24 * 60 * 60 * 1000;
+        const usable = openSessions.find((s) => {
+          if (s.turnCount > 0) return true;
+          const age = Date.now() - new Date(s.openedAt).getTime();
+          return age < GHOST_AFTER_MS;
+        });
+        let sid: string;
+        if (usable) {
+          sid = usable.sessionId;
+        } else {
+          const res = await legacyApi.startSession(personId, "");
+          await qc.invalidateQueries({ queryKey: qk.sessions(personId) });
+          sid = res.sessionId;
+        }
+        const trimmed = prompt?.trim();
+        const qs = trimmed ? `?prompt=${encodeURIComponent(trimmed)}` : "";
+        router.push(
+          `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(sid)}${qs}`
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not open the conversation.");
+        setPendingPersonId(null);
+      }
+    },
+    [router, qc]
+  );
+
+  return { open, pendingPersonId, error, clearError: () => setError(null) };
+}
+
 export function useSendTurn(personId: string, sessionId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -273,6 +344,20 @@ export function useSendTurn(personId: string, sessionId: string) {
       qc.setQueryData<LegacyTurn[]>(qk.turns(personId, sessionId), (prev) =>
         prev ? [...prev, data.turn] : [data.turn]
       );
+    },
+    onError: (err) => {
+      // 409 means the server's view of the session disagrees with ours —
+      // typically it's been wrapped/locked while our cached list still
+      // says "open". Refetch sessions so the composer unmounts and the
+      // user stops mash-clicking Send against a closed session.
+      const status =
+        err instanceof ApiError ? err.status : undefined;
+      if (status === 409 || status === 410 || status === 423) {
+        void qc.invalidateQueries({ queryKey: qk.sessions(personId) });
+        void qc.invalidateQueries({
+          queryKey: qk.turns(personId, sessionId),
+        });
+      }
     },
   });
 }

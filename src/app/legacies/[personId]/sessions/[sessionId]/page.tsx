@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppHeader } from "../../../../components/AppHeader";
 import {
   BreathDots,
@@ -15,6 +15,8 @@ import {
   Textarea,
 } from "../../../../components/ui";
 import { useRequireAuth } from "../../../../hooks/useRequireAuth";
+import { schedulePostWrapPoll } from "../../../../hooks/usePostWrapPoll";
+import { ApiError } from "../../../../lib/api";
 import {
   useLegacyHeader,
   useLegacySessions,
@@ -57,6 +59,7 @@ export default function ConversationPage({
   const { personId, sessionId } = use(params);
   const auth = useRequireAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const headerQ = useLegacyHeader(personId);
   const sessionsQ = useLegacySessions(personId, 50);
@@ -77,20 +80,51 @@ export default function ConversationPage({
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [wrapConfirmOpen, setWrapConfirmOpen] = useState(false);
+  // Set when the server returns 409/410/423 — the backend disagrees with
+  // our cached session.status. Once locked, we hide the composer and
+  // show a "Start fresh" CTA that mints a new session and carries the
+  // user's stranded draft along, regardless of what status.open says.
+  const [sessionLocked, setSessionLocked] = useState(false);
+  // The question the user came in to answer — shown as a pinned prompt
+  // card above the composer, NOT prefilled into the composer itself, so
+  // the user's typing space stays clear for their actual answer. Cleared
+  // once they send their first turn.
+  const [pinnedQuestion, setPinnedQuestion] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // One-shot seed: when arriving with ?prompt=<question> (from the workshop's
+  // Questions tab or the home rail), pin that question above the composer
+  // so the user can read it while typing — *not* drop it into the input.
+  // Strip the param afterward so back/refresh doesn't repin a dismissed
+  // question.
+  const seededPromptRef = useRef(false);
+  useEffect(() => {
+    if (seededPromptRef.current) return;
+    const seed = searchParams?.get("prompt");
+    if (!seed) return;
+    seededPromptRef.current = true;
+    setPinnedQuestion(seed);
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.delete("prompt");
+    const qs = params.toString();
+    router.replace(
+      `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(sessionId)}${qs ? `?${qs}` : ""}`,
+      { scroll: false }
+    );
+  }, [searchParams, router, personId, sessionId]);
 
   // Auto-focus the composer when the conversation loads, and again after each
   // send + reply, so the user can keep typing without ever clicking the field.
   useEffect(() => {
-    if (session?.status !== "open") return;
+    if (session?.status !== "open" || sessionLocked) return;
     textareaRef.current?.focus({ preventScroll: true });
-  }, [session?.status, turnsQ.data, sendTurn.isPending]);
+  }, [session?.status, sessionLocked, turnsQ.data, sendTurn.isPending]);
 
   // Page-level keypress: any printable key (when nothing else is focused) should
   // route into the composer. Chat-app feel — start typing and you're already in.
   useEffect(() => {
-    if (session?.status !== "open") return;
+    if (session?.status !== "open" || sessionLocked) return;
     const onKey = (e: KeyboardEvent) => {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -102,7 +136,7 @@ export default function ConversationPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [session?.status]);
+  }, [session?.status, sessionLocked]);
 
   // When a new turn arrives, scroll the page to the bottom. The spacer below
   // the scroller is sized to match the fixed composer, so landing at page
@@ -135,10 +169,56 @@ export default function ConversationPage({
     try {
       await sendTurn.mutateAsync(message);
       setPendingUserMessage(null);
+      // The user just answered the pinned question — drop the card so
+      // it doesn't keep hovering above subsequent replies in the same
+      // session.
+      setPinnedQuestion(null);
     } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "Failed to send message.");
-      setDraft(message);
       setPendingUserMessage(null);
+      // On 409/410/423 the server says this session no longer accepts
+      // turns. useSendTurn already kicked off a sessions refetch — the
+      // composer will unmount as soon as session.status flips. Don't
+      // restore the draft or it'll tempt the user to keep mashing Send
+      // before the refetch lands; show a clear "start a new chat" hint.
+      const status = err instanceof ApiError ? err.status : undefined;
+      if (status === 409 || status === 410 || status === 423) {
+        setSessionLocked(true);
+        // Keep the user's message in draft so the "Start fresh" CTA can
+        // carry it into the new session as a seed.
+        setDraft(message);
+        setLocalError(
+          "This conversation is no longer accepting messages. Start a new one — we'll bring your message along."
+        );
+      } else {
+        setLocalError(
+          err instanceof Error ? err.message : "Failed to send message."
+        );
+        setDraft(message);
+      }
+    }
+  };
+
+  const handleStartFreshWithDraft = async () => {
+    setLocalError(null);
+    // Carry the *pinned question* (not the user's typed draft) so the
+    // new session re-pins it above the composer for context. The draft
+    // is intentionally not seeded back into the input — the recovery
+    // card showed it as a preview so the user could copy if needed.
+    const carryQuestion = pinnedQuestion?.trim() ?? "";
+    try {
+      const res = await startSession.mutateAsync();
+      const qs = carryQuestion
+        ? `?prompt=${encodeURIComponent(carryQuestion)}`
+        : "";
+      router.push(
+        `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
+          res.sessionId
+        )}${qs}`
+      );
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Could not start a new conversation."
+      );
     }
   };
 
@@ -151,6 +231,10 @@ export default function ConversationPage({
     setLocalError(null);
     try {
       await wrapSession.mutateAsync();
+      // Arm the post-wrap polling window so when the user lands back
+      // on the legacy detail page, entities/moments/themes refresh
+      // every 5s for 2 minutes and new items get a toast.
+      schedulePostWrapPoll(personId);
       setWrapConfirmOpen(false);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Failed to wrap session.");
@@ -209,6 +293,11 @@ export default function ConversationPage({
 
   const isOpen = session?.status === "open";
   const isWrapped = session?.status === "wrapped";
+  // Server's view of "open" is authoritative for status badges, but for
+  // the composer we layer in `sessionLocked` so a 409-rejecting session
+  // (server still says open, but won't accept turns) doesn't keep the
+  // user staring at a mash-able Send button.
+  const composerOpen = isOpen && !sessionLocked;
 
   const statusBadge = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 label-mono text-meta text-secondary">
@@ -261,6 +350,44 @@ export default function ConversationPage({
       {error && (
         <div className="mb-6">
           <ErrorBanner>{error}</ErrorBanner>
+        </div>
+      )}
+
+      {sessionLocked && (
+        <div className="mb-6 rounded-2xl border border-[rgb(var(--accent-soft))]/45 bg-[rgba(18,14,38,0.78)] p-4 shadow-[0_24px_60px_-20px_rgba(123,115,253,0.55)] sm:p-5">
+          <p className="display-sans text-title leading-snug text-white">
+            This conversation can't take new messages.
+          </p>
+          <p className="mt-1.5 text-caption text-secondary">
+            We'll start a fresh one and bring your reply along.
+          </p>
+          {draft.trim() && (
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <p className="label-mono text-meta text-tertiary">Your reply</p>
+              <p className="mt-1 text-caption text-primary line-clamp-3">
+                {draft.trim()}
+              </p>
+            </div>
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2.5">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSessionLocked(false);
+                setLocalError(null);
+              }}
+              disabled={startSession.isPending}
+            >
+              Dismiss
+            </Button>
+            <Button
+              onClick={() => void handleStartFreshWithDraft()}
+              disabled={startSession.isPending}
+            >
+              {startSession.isPending && <Spinner />}
+              {startSession.isPending ? "Opening…" : "Start fresh conversation"}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -400,7 +527,7 @@ export default function ConversationPage({
                     <p className="text-body font-medium text-white">
                       {startSession.isPending
                         ? "Opening…"
-                        : `Talk to ${firstName || "them"} again`}
+                        : `Talk about ${firstName || "them"} again`}
                     </p>
                     <p className="mt-0.5 text-caption text-secondary">
                       Begin a new conversation
@@ -473,14 +600,22 @@ export default function ConversationPage({
 
       {/* Reserve vertical space so the fixed composer never sits on top
           of the last assistant reply. Smaller on mobile so the thread
-          uses more of the visible viewport above the keyboard. */}
-      {isOpen && <div aria-hidden className="h-40 sm:h-56" />}
+          uses more of the visible viewport above the keyboard. Extra
+          room when a question is pinned above the input. */}
+      {composerOpen && (
+        <div
+          aria-hidden
+          className={
+            pinnedQuestion ? "h-56 sm:h-72" : "h-40 sm:h-56"
+          }
+        />
+      )}
 
       {/* Composer — fixed to the viewport so it never unpins on short
           pages. Tight padding + smaller textarea on mobile so the input
           feels chat-app-native (sits flush near the bottom edge); roomier
           on desktop where there's more space to breathe. */}
-      {isOpen && (
+      {composerOpen && (
         <form
           onSubmit={handleSend}
           className="fixed inset-x-0 bottom-0 z-30 px-3 pt-6 pb-safe sm:px-6 sm:pt-12 md:px-8"
@@ -490,6 +625,39 @@ export default function ConversationPage({
           }}
         >
           <div className="mx-auto w-full max-w-3xl">
+            {pinnedQuestion && (
+              <div className="mb-2 rounded-2xl border border-[rgb(var(--accent-soft))]/45 bg-[rgba(18,14,38,0.92)] px-3 py-2.5 shadow-[0_18px_44px_-20px_rgba(123,115,253,0.55)] sm:mb-3 sm:rounded-3xl sm:px-4 sm:py-3">
+                <div className="flex items-start gap-2.5">
+                  <span
+                    aria-hidden
+                    className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.9)]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="label-mono text-meta text-tertiary">
+                      Answering
+                    </p>
+                    <p className="mt-0.5 serif text-caption leading-snug text-primary sm:text-body">
+                      {pinnedQuestion}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPinnedQuestion(null)}
+                    aria-label="Dismiss question"
+                    className="shrink-0 rounded-full p-1 text-tertiary transition hover:bg-white/8 hover:text-white"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                      <path
+                        d="M6 6l12 12M18 6L6 18"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
             <div
               className="rounded-2xl border-2 border-white/28 p-3 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] sm:rounded-3xl sm:p-4"
               style={{
@@ -508,7 +676,11 @@ export default function ConversationPage({
                     void handleSend();
                   }
                 }}
-                placeholder="A memory. A moment. Anything."
+                placeholder={
+                  pinnedQuestion
+                    ? "Your answer…"
+                    : "A memory. A moment. Anything."
+                }
                 disabled={sendTurn.isPending}
                 autoFocus
                 className="border-0 bg-transparent px-1 py-1 text-body shadow-none sm:rows-2 focus:bg-transparent focus:shadow-none"

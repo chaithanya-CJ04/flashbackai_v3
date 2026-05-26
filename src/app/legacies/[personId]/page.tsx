@@ -25,6 +25,7 @@ import {
   ThemeIcon,
 } from "../../components/ui";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
+import { usePostWrapPoll } from "../../hooks/usePostWrapPoll";
 import {
   useApproveMerge,
   useEntities,
@@ -34,6 +35,7 @@ import {
   useLegacyQuestions,
   useLegacySessions,
   useMoments,
+  useOpenConversationFor,
   useProfileFacts,
   useRejectMerge,
   useScanIdentityMerges,
@@ -89,6 +91,11 @@ export default function LegacyDetailPage({
 }) {
   const { personId } = use(params);
   const auth = useRequireAuth();
+
+  // Picks up the schedule armed by the session page after a wrap and
+  // keeps moments/entities/themes refreshing every 5s for 2 minutes,
+  // toasting any genuinely new items so the user notices.
+  usePostWrapPoll(personId);
 
   const headerQ = useLegacyHeader(personId);
 
@@ -238,7 +245,7 @@ function ProfileSection({
 
 // ---------- Section 2: Conversation CTA ----------
 
-/** Big, obvious "Talk to {name}" card sitting right under the profile.
+/** Big, obvious "Talk about {name}" card sitting right under the profile.
  *  The primary action of this screen for the target audience (memory care,
  *  older users) — never hidden behind an input bar or workshop drawer. */
 function ConversationCTA({
@@ -268,10 +275,10 @@ function ConversationCTA({
   const hasPast = !openSession && totalCount > 0;
 
   const label = isContinuing
-    ? `Continue talking to ${firstName}`
+    ? `Continue talking about ${firstName}`
     : hasPast
-      ? `Talk to ${firstName} again`
-      : `Begin talking to ${firstName}`;
+      ? `Talk about ${firstName} again`
+      : `Begin talking about ${firstName}`;
 
   const subtitle = isContinuing
     ? `Conversation in progress${
@@ -1338,6 +1345,7 @@ function FactsTab({
 
 function QuestionsTab({ personId }: { personId: string }) {
   const q = useLegacyQuestions(personId);
+  const opener = useOpenConversationFor();
   if (q.isError) return <ErrText q={q} />;
   if (q.isLoading) return <LoaderRow />;
   const items = q.data ?? [];
@@ -1349,19 +1357,48 @@ function QuestionsTab({ personId }: { personId: string }) {
       />
     );
 
+  const busy = opener.pendingPersonId === personId;
+
   return (
     <div>
-      <TabHeader title="Questions" subtitle="Threads worth pulling next." />
+      <TabHeader
+        title="Questions"
+        subtitle="Threads worth pulling next. Tap one to answer in conversation."
+      />
+      {opener.error && (
+        <div className="mb-3">
+          <ErrorBanner>{opener.error}</ErrorBanner>
+        </div>
+      )}
       <div className="space-y-3">
         {items.map((qq) => (
-          <Card key={qq.id} className="p-5">
+          <button
+            key={qq.id}
+            type="button"
+            onClick={() => void opener.open(personId, qq.text)}
+            disabled={busy}
+            aria-label={`Answer in conversation: ${qq.text}`}
+            className="group block w-full rounded-2xl border border-white/10 bg-[rgba(10,8,22,0.6)] p-5 text-left transition-[border-color,background-color,transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/55 hover:bg-[rgba(18,14,38,0.85)] hover:shadow-[0_30px_70px_-25px_rgba(123,115,253,0.55)] active:scale-[0.995] disabled:cursor-progress disabled:opacity-70"
+          >
             <p className="display-sans text-title leading-snug text-white">
               {qq.text}
             </p>
-            <p className="mt-3 label-mono text-meta text-tertiary">
-              Source · {qq.source.replace(/_/g, " ")}
-            </p>
-          </Card>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="label-mono text-meta text-tertiary">
+                Source · {qq.source.replace(/_/g, " ")}
+              </p>
+              <span className="inline-flex items-center gap-1.5 label-mono text-meta text-[rgb(var(--accent-soft))] opacity-80 transition group-hover:opacity-100">
+                {busy ? (
+                  <Spinner className="h-3.5 w-3.5" />
+                ) : (
+                  <>
+                    Answer in chat
+                    <span aria-hidden>→</span>
+                  </>
+                )}
+              </span>
+            </div>
+          </button>
         ))}
       </div>
     </div>

@@ -11,7 +11,9 @@ import {
   Input,
   PageLoader,
   PageShell,
+  Sparkle,
   Spinner,
+  Textarea,
 } from "../../components/ui";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import {
@@ -22,6 +24,11 @@ import {
 } from "../../lib/queries";
 
 type Step = "photo" | "details" | "archetype";
+
+/** Sentinel `option_id` value used in component state to mean "the user
+ *  picked Other and is typing a free-text answer". Never sent to the
+ *  backend — at submit time we substitute the typed text. */
+const CUSTOM_OPTION_ID = "__custom__";
 
 type StepMeta = {
   id: Step;
@@ -111,6 +118,13 @@ export default function NewLegacyOnboarding() {
 
   // Archetype step state
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Per the PRD §5.2, multiple-choice questions surface a "Custom" option
+  // that lets the user type their own answer. We track the option pick
+  // and the free-text body separately so toggling between presets and
+  // custom doesn't lose what the user already typed.
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>(
+    {}
+  );
 
   // Queries / mutations
   const uploadPhoto = useUploadOnboardingPhoto();
@@ -184,8 +198,21 @@ export default function NewLegacyOnboarding() {
     if (!personId || !archetypeQ.data) return;
     setError(null);
 
+    // A question counts as answered when:
+    //  - a preset option is selected, OR
+    //  - the "Other" sentinel is selected AND a non-empty custom text
+    //    was typed for it.
+    const isAnswered = (qid: string) => {
+      const pick = answers[qid];
+      if (!pick) return false;
+      if (pick === CUSTOM_OPTION_ID) {
+        return (customAnswers[qid] ?? "").trim().length > 0;
+      }
+      return true;
+    };
+
     const unanswered = archetypeQ.data.filter(
-      (q) => !answers[q.id] && !q.allow_skip
+      (q) => !isAnswered(q.id) && !q.allow_skip
     );
     if (unanswered.length > 0) {
       setError(`Please answer: ${unanswered.map((q) => `"${q.text}"`).join(", ")}`);
@@ -196,8 +223,19 @@ export default function NewLegacyOnboarding() {
       const res = await submitAnswers.mutateAsync({
         contributorDisplayName: contributorDisplayName.trim(),
         answers: archetypeQ.data
-          .filter((q) => answers[q.id])
-          .map((q) => ({ question_id: q.id, option_id: answers[q.id] })),
+          .filter((q) => isAnswered(q.id))
+          .map((q) => {
+            const pick = answers[q.id];
+            // For "Other" we send the user's typed text as the option_id
+            // so the backend stores the free-text answer directly. If
+            // the backend later adds a dedicated `free_text` field, this
+            // is the one spot to swap.
+            const option_id =
+              pick === CUSTOM_OPTION_ID
+                ? (customAnswers[q.id] ?? "").trim()
+                : pick;
+            return { question_id: q.id, option_id };
+          }),
       });
       router.replace(
         `/legacies/${encodeURIComponent(personId)}/sessions/${encodeURIComponent(
@@ -339,6 +377,8 @@ export default function NewLegacyOnboarding() {
                 questions={archetypeQ.data ?? []}
                 answers={answers}
                 setAnswers={setAnswers}
+                customAnswers={customAnswers}
+                setCustomAnswers={setCustomAnswers}
                 onSubmit={handleSubmitAnswers}
                 onBack={() => setStep("details")}
                 pending={submitAnswers.isPending}
@@ -795,6 +835,7 @@ type ArchetypeQuestion = {
   id: string;
   text: string;
   allow_skip?: boolean;
+  allow_free_text?: boolean;
   options: Array<{ id: string; label: string }>;
 };
 
@@ -808,6 +849,8 @@ function ArchetypeStep({
   questions,
   answers,
   setAnswers,
+  customAnswers,
+  setCustomAnswers,
   onSubmit,
   onBack,
   pending,
@@ -818,6 +861,10 @@ function ArchetypeStep({
   questions: ArchetypeQuestion[];
   answers: Record<string, string>;
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  customAnswers: Record<string, string>;
+  setCustomAnswers: React.Dispatch<
+    React.SetStateAction<Record<string, string>>
+  >;
   onSubmit: (e: FormEvent) => void;
   onBack: () => void;
   pending: boolean;
@@ -853,7 +900,13 @@ function ArchetypeStep({
   const q = questions[safeIndex];
   const isFirst = safeIndex === 0;
   const isLast = safeIndex === questions.length - 1;
-  const answered = !!answers[q.id];
+  const pick = answers[q.id];
+  const customText = (customAnswers[q.id] ?? "").trim();
+  // "Other" only counts as answered once the user has actually typed
+  // something — picking the radio with an empty field shouldn't unlock
+  // Next, that's how the user would skip past the question accidentally.
+  const answered =
+    !!pick && (pick !== CUSTOM_OPTION_ID || customText.length > 0);
   const canAdvance = answered || q.allow_skip;
 
   const goPrev = () => {
@@ -881,8 +934,12 @@ function ArchetypeStep({
             type="button"
             onClick={goNext}
             disabled={isLast}
-            className="rounded-full border border-white/22 bg-white/4 px-4 py-2 text-caption text-secondary transition hover:border-white/40 hover:bg-white/10 hover:text-white disabled:opacity-50"
+            className="group/skip relative inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--accent-soft))]/45 bg-[rgb(var(--accent))]/12 px-4 py-2 text-caption text-[rgb(var(--accent-soft))] shadow-[0_0_0_1px_rgba(180,173,255,0.06)_inset] transition hover:border-[rgb(var(--accent-soft))]/75 hover:bg-[rgb(var(--accent))]/22 hover:text-white hover:shadow-[0_10px_28px_-12px_rgba(123,115,253,0.55)] disabled:opacity-50"
           >
+            <Sparkle
+              size={13}
+              className="opacity-80 transition group-hover/skip:opacity-100"
+            />
             Skip
           </button>
         )}
@@ -936,7 +993,66 @@ function ArchetypeStep({
               </button>
             );
           })}
+
+          {q.allow_free_text && (
+            <button
+              type="button"
+              aria-pressed={answers[q.id] === CUSTOM_OPTION_ID}
+              onClick={() =>
+                setAnswers((prev) => ({
+                  ...prev,
+                  [q.id]: CUSTOM_OPTION_ID,
+                }))
+              }
+              className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-4 text-left text-body leading-snug transition ${
+                answers[q.id] === CUSTOM_OPTION_ID
+                  ? "border-[rgb(var(--accent-soft))]/70 bg-[rgb(var(--accent))]/55 text-white shadow-[0_12px_30px_-12px_rgba(123,115,253,0.7)]"
+                  : "border-white/22 bg-white/5 text-primary hover:border-white/45 hover:bg-white/10"
+              }`}
+            >
+              <span
+                className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 transition ${
+                  answers[q.id] === CUSTOM_OPTION_ID
+                    ? "border-white bg-white text-[rgb(var(--accent-deep))]"
+                    : "border-white/40 bg-transparent"
+                }`}
+                aria-hidden
+              >
+                {answers[q.id] === CUSTOM_OPTION_ID && (
+                  <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5">
+                    <path
+                      d="M5 12l4 4 10-10"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </span>
+              <span>Other (write your own)</span>
+            </button>
+          )}
         </div>
+
+        {q.allow_free_text && answers[q.id] === CUSTOM_OPTION_ID && (
+          <div className="mt-4 rounded-2xl border border-[rgb(var(--accent-soft))]/45 bg-[rgba(18,14,38,0.6)] p-3 sm:p-4">
+            <Eyebrow>Your answer</Eyebrow>
+            <Textarea
+              rows={2}
+              autoFocus
+              value={customAnswers[q.id] ?? ""}
+              onChange={(e) =>
+                setCustomAnswers((prev) => ({
+                  ...prev,
+                  [q.id]: e.target.value,
+                }))
+              }
+              placeholder="A few words is plenty."
+              className="mt-2"
+            />
+          </div>
+        )}
 
         {answered && q.allow_skip && (
           <button

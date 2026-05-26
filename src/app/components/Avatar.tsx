@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MediaImg } from "./MediaImg";
 
 /** Renders a person avatar that gracefully degrades:
  *
@@ -58,11 +59,11 @@ export function Avatar({
       <div className="absolute inset-0 bg-linear-to-br from-[rgb(var(--accent))]/35 via-[rgb(var(--accent-deep))]/30 to-black/40" />
       {current ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <MediaImg
             src={current}
             alt={name}
             className="absolute inset-0 h-full w-full object-cover"
+            skeletonRounded={rounded}
             onError={() => {
               if (activeIdx < candidates.length - 1) {
                 setActiveIdx((i) => i + 1);

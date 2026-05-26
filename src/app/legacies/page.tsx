@@ -6,6 +6,7 @@ import { useQueries } from "@tanstack/react-query";
 import { AppHeader } from "../components/AppHeader";
 import { Avatar } from "../components/Avatar";
 import { CurvedDeck } from "../components/CurvedDeck";
+import { MediaImg } from "../components/MediaImg";
 import {
   Button,
   Card,
@@ -23,6 +24,7 @@ import { useRequireAuth } from "../hooks/useRequireAuth";
 import {
   qk,
   useLegacies,
+  useOpenConversationFor,
   useUpsertProfileFact,
   type Legacy,
 } from "../lib/queries";
@@ -42,11 +44,23 @@ function relativeTime(iso: string): string {
   return `${Math.floor(day / 30)}mo ago`;
 }
 
-function Portrait({ legacy }: { legacy: Legacy }) {
-  const usable =
-    legacy.referenceImageUrl &&
-    /^https?:\/\//i.test(legacy.referenceImageUrl)
-      ? legacy.referenceImageUrl
+function Portrait({
+  legacy,
+  generatedImageUrl,
+}: {
+  legacy: Legacy;
+  /** AI-generated portrait fetched from the detail endpoint — used as
+   *  fallback when the user hasn't uploaded their own photo. The list
+   *  endpoint doesn't return this, so it's resolved per-legacy at the
+   *  page level and threaded in here. */
+  generatedImageUrl?: string | null;
+}) {
+  const isUrl = (u: string | null | undefined): u is string =>
+    !!u && /^https?:\/\//i.test(u);
+  const usable = isUrl(legacy.referenceImageUrl)
+    ? legacy.referenceImageUrl
+    : isUrl(generatedImageUrl)
+      ? generatedImageUrl
       : null;
 
   const initials =
@@ -69,12 +83,12 @@ function Portrait({ legacy }: { legacy: Legacy }) {
         <div className="absolute inset-0 bg-linear-to-br from-[rgb(var(--accent))]/30 via-[rgb(var(--accent-deep))]/25 to-black/50" />
 
         {usable ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <MediaImg
             src={usable}
             alt={legacy.deceasedName}
             draggable={false}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+            skeletonRounded="rounded-2xl sm:rounded-3xl"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
@@ -242,6 +256,39 @@ function HomeHero({ count }: { count: number }) {
    ──────────────────────────────────────────────────────────────────── */
 
 function HomeBody({ legacies }: { legacies: Legacy[] }) {
+  const questionsRef = useRef<HTMLElement | null>(null);
+
+  // For any legacy missing an uploaded photo, fetch its detail header
+  // (which carries the backend's AI-generated portrait under imageUrl /
+  // thumbnailUrl) so the home deck can render that instead of a bare
+  // initial. We only fan out for those that *need* it — uploaded photos
+  // skip the round trip entirely.
+  const needsGeneratedImage = useMemo(
+    () =>
+      legacies.filter((l) => {
+        const u = l.referenceImageUrl;
+        return !u || !/^https?:\/\//i.test(u);
+      }),
+    [legacies]
+  );
+
+  const headerQueries = useQueries({
+    queries: needsGeneratedImage.map((l) => ({
+      queryKey: qk.legacy(l.personId),
+      queryFn: () => legacyApi.getLegacyHeader(l.personId).then((r) => r.item),
+      staleTime: 5 * 60_000,
+    })),
+  });
+
+  const generatedImages = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    needsGeneratedImage.forEach((l, i) => {
+      const h = headerQueries[i]?.data;
+      map[l.personId] = h?.imageUrl ?? h?.thumbnailUrl ?? null;
+    });
+    return map;
+  }, [needsGeneratedImage, headerQueries]);
+
   // Fan out one questions query per onboarded legacy. The endpoint is
   // gated by onboardingComplete server-side too, but skipping un-set-up
   // ones here saves a round trip and avoids 4xxs on incomplete people.
@@ -302,7 +349,13 @@ function HomeBody({ legacies }: { legacies: Legacy[] }) {
         <CurvedDeck bend={70} rotation={7} className="py-8 sm:py-10">
           {[
             <div key="lead" className="w-[10vw] min-w-[32px]" />,
-            ...legacies.map((l) => <Portrait key={l.personId} legacy={l} />),
+            ...legacies.map((l) => (
+              <Portrait
+                key={l.personId}
+                legacy={l}
+                generatedImageUrl={generatedImages[l.personId] ?? null}
+              />
+            )),
             <div key="tail" className="w-[10vw] min-w-[32px]" />,
           ]}
         </CurvedDeck>
@@ -312,11 +365,133 @@ function HomeBody({ legacies }: { legacies: Legacy[] }) {
       </p>
 
       {hasQuestions && (
-        <section className="mt-14 sm:mt-20">
+        <section ref={questionsRef} className="mt-14 sm:mt-20">
           <QuestionConstellation stack={stack} />
         </section>
       )}
+
+      {hasQuestions && (
+        <ScrollHintBloom targetRef={questionsRef} />
+      )}
+
+      {hasQuestions && (
+        <ScrollToQuestionsHint count={stack.length} targetRef={questionsRef} />
+      )}
     </>
+  );
+}
+
+/* Big ambient bloom that rises from the bottom of the viewport whenever
+   there are unanswered questions waiting below the fold. Sits behind
+   everything (z-0, pointer-events-none) so it never blocks interaction.
+   Fades with the pill once the constellation reaches the viewport. */
+function ScrollHintBloom({
+  targetRef,
+}: {
+  targetRef: React.RefObject<HTMLElement | null>;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setVisible(!entry.isIntersecting),
+      { rootMargin: "0px 0px -25% 0px", threshold: 0 }
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [targetRef]);
+
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none fixed inset-x-0 bottom-0 z-0 h-[42vh] transition-opacity duration-700 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      {/* Wide violet base bloom — the "something's down here" glow. */}
+      <div className="absolute inset-x-0 bottom-0 h-full bg-[radial-gradient(80%_70%_at_50%_115%,rgba(123,115,253,0.32)_0%,rgba(123,115,253,0.14)_38%,transparent_72%)]" />
+      {/* Warm secondary kiss — pulls the eye down without going cold. */}
+      <div className="absolute inset-x-0 bottom-0 h-full bg-[radial-gradient(45%_45%_at_50%_120%,rgba(240,200,154,0.16)_0%,transparent_65%)]" />
+      {/* Slow breathing layer so the bloom feels alive, not static. */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-full bg-[radial-gradient(55%_55%_at_50%_125%,rgba(180,173,255,0.22)_0%,transparent_70%)] mix-blend-screen"
+        style={{
+          animation: "bloomBreath 5.5s ease-in-out infinite",
+        }}
+      />
+      <style>{`
+        @keyframes bloomBreath {
+          0%, 100% { opacity: 0.55; transform: translateY(8px) scale(1); }
+          50%      { opacity: 1;    transform: translateY(0)   scale(1.04); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* Floating affordance that lives above the BottomNav and points to the
+   QuestionConstellation below the fold. Without it the home reads as
+   "deck + nothing else" — the open-thread inbox is invisible until the
+   user happens to scroll. The pill fades out once the constellation
+   itself enters the viewport, so it never competes with the real UI. */
+function ScrollToQuestionsHint({
+  count,
+  targetRef,
+}: {
+  count: number;
+  targetRef: React.RefObject<HTMLElement | null>;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setVisible(!entry.isIntersecting),
+      { rootMargin: "0px 0px -25% 0px", threshold: 0 }
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [targetRef]);
+
+  const onClick = () => {
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const label =
+    count === 1 ? "01 open question below" : `${count.toString().padStart(2, "0")} open questions below`;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Scroll to ${label}`}
+      className={`fixed left-1/2 z-20 -translate-x-1/2 transition-[opacity,transform] duration-500 ease-out ${
+        visible
+          ? "translate-y-0 opacity-100"
+          : "pointer-events-none translate-y-2 opacity-0"
+      }`}
+      style={{
+        bottom: "calc(env(safe-area-inset-bottom) + 5.25rem)",
+      }}
+    >
+      <span className="group inline-flex items-center gap-2.5 rounded-full border border-[rgb(var(--accent-soft))]/55 bg-[rgba(10,8,22,0.92)] px-4 py-2 label-mono text-meta text-white shadow-[0_24px_60px_-18px_rgba(123,115,253,0.7)] backdrop-blur-xl transition hover:border-[rgb(var(--accent-soft))]/80 hover:bg-[rgba(18,14,38,0.96)] active:scale-[0.97]">
+        <span className="relative inline-flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[rgb(var(--accent-soft))]/55" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent-soft))] shadow-[0_0_10px_rgba(180,173,255,0.9)]" />
+        </span>
+        <span className="tabular-nums">{label}</span>
+        <span
+          aria-hidden
+          className="ml-0.5 inline-block animate-bounce text-[rgb(var(--accent-soft))]"
+          style={{ animationDuration: "1.4s" }}
+        >
+          ↓
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -357,6 +532,8 @@ function QuestionConstellation({
 }: {
   stack: Array<{ question: LegacyQuestion; legacy: Legacy }>;
 }) {
+  const opener = useOpenConversationFor();
+
   // Snapshot order once so a background refetch doesn't shuffle cards
   // out from under the user mid-answer.
   const ordered = useMemo(() => stack, [stack.map((s) => s.question.id).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -608,21 +785,44 @@ function QuestionConstellation({
               </div>
             )}
 
-            <div className="relative mt-6 flex flex-wrap items-center justify-end gap-2.5">
-              <Button
-                variant="ghost"
-                onClick={skip}
-                disabled={upsert.isPending || !!exitingId}
+            <div className="relative mt-6 flex flex-wrap items-center justify-between gap-2.5">
+              <button
+                type="button"
+                onClick={() =>
+                  void opener.open(current.legacy.personId, current.question.text)
+                }
+                disabled={
+                  upsert.isPending ||
+                  !!exitingId ||
+                  opener.pendingPersonId === current.legacy.personId
+                }
+                className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--accent-soft))]/40 bg-[rgb(var(--accent-soft))]/8 px-3 py-1.5 label-mono text-meta text-[rgb(var(--accent-soft))] transition hover:border-[rgb(var(--accent-soft))]/70 hover:bg-[rgb(var(--accent-soft))]/14 active:scale-[0.98] disabled:cursor-progress disabled:opacity-70"
               >
-                Skip
-              </Button>
-              <Button
-                onClick={() => void save()}
-                disabled={upsert.isPending || !!exitingId}
-              >
-                {upsert.isPending && <Spinner />}
-                {upsert.isPending ? "Saving…" : "Save answer"}
-              </Button>
+                {opener.pendingPersonId === current.legacy.personId ? (
+                  <Spinner className="h-3.5 w-3.5" />
+                ) : (
+                  <>
+                    Answer in chat
+                    <span aria-hidden>→</span>
+                  </>
+                )}
+              </button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Button
+                  variant="ghost"
+                  onClick={skip}
+                  disabled={upsert.isPending || !!exitingId}
+                >
+                  Skip
+                </Button>
+                <Button
+                  onClick={() => void save()}
+                  disabled={upsert.isPending || !!exitingId}
+                >
+                  {upsert.isPending && <Spinner />}
+                  {upsert.isPending ? "Saving…" : "Save answer"}
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
@@ -630,7 +830,9 @@ function QuestionConstellation({
 
       {/* Every other open question — horizontal rail. Each tile is
           portrait-tagged so the home reads as "all the threads, from
-          everyone, in one place" — the workshop's depth, surfaced. */}
+          everyone, in one place" — the workshop's depth, surfaced.
+          Tapping a tile opens that person's conversation with the
+          question pre-seeded into the composer. */}
       {rest.length > 0 && (
         <div className="mt-10 sm:mt-12">
           <div className="mb-3 flex items-center justify-between px-1">
@@ -640,9 +842,14 @@ function QuestionConstellation({
               <span className="tabular-nums">{rest.length.toString().padStart(2, "0")}</span>
             </div>
             <span className="label-mono text-meta text-tertiary">
-              Tap to answer
+              Tap to open chat
             </span>
           </div>
+          {opener.error && (
+            <div className="mb-3">
+              <ErrorBanner>{opener.error}</ErrorBanner>
+            </div>
+          )}
           <div className="scroll-fade-x -mx-4 sm:-mx-6 md:-mx-8">
             <div className="no-scrollbar flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto px-4 pb-2 sm:gap-4 sm:px-6 md:px-8">
               {rest.map((p, i) => (
@@ -650,7 +857,9 @@ function QuestionConstellation({
                   key={p.question.id}
                   p={p}
                   index={i}
-                  onClick={() => setPinnedId(p.question.id)}
+                  pending={opener.pendingPersonId === p.legacy.personId}
+                  onClick={() => void opener.open(p.legacy.personId, p.question.text)}
+                  onPin={() => setPinnedId(p.question.id)}
                 />
               ))}
             </div>
@@ -659,7 +868,9 @@ function QuestionConstellation({
       )}
 
       <p className="mt-6 text-center label-mono text-meta text-tertiary">
-        {rest.length === 0 ? "Last card." : "Drag the rail · tap a card to bring it centre-stage."}
+        {rest.length === 0
+          ? "Last card."
+          : "Tap a card to answer in chat · use ✦ to bring it centre-stage."}
       </p>
     </div>
   );
@@ -672,49 +883,80 @@ function QuestionConstellation({
 function QuestionTile({
   p,
   index,
+  pending,
   onClick,
+  onPin,
 }: {
   p: { question: LegacyQuestion; legacy: Legacy };
   index: number;
+  pending: boolean;
   onClick: () => void;
+  onPin: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-      className="rise-in group relative w-[78vw] max-w-[18rem] shrink-0 snap-start overflow-hidden rounded-2xl border border-white/20 bg-[rgba(10,8,22,0.94)] p-4 text-left backdrop-blur-xl shadow-[0_30px_80px_-30px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] transition-[border-color,box-shadow,background-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/55 hover:bg-[rgba(18,14,38,0.96)] hover:shadow-[0_40px_80px_-25px_rgba(123,115,253,0.55)] active:scale-[0.985] sm:w-88"
+      className="rise-in group/tile relative w-[78vw] max-w-[18rem] shrink-0 snap-start sm:w-88"
     >
-      {/* Left-edge accent — slides in on hover, matches RowLink. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute left-0 top-1/2 h-12 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent opacity-0 transition group-hover:opacity-100"
-      />
-      <div className="relative flex items-center gap-3">
-        <Avatar
-          name={p.legacy.deceasedName}
-          imageUrl={p.legacy.referenceImageUrl}
-          size={36}
-          rounded="rounded-full"
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={pending}
+        aria-label={`Answer in chat: ${p.question.text}`}
+        className="group relative block h-full w-full overflow-hidden rounded-2xl border border-white/20 bg-[rgba(10,8,22,0.94)] p-4 text-left backdrop-blur-xl shadow-[0_30px_80px_-30px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] transition-[border-color,box-shadow,background-color,transform] duration-300 hover:-translate-y-0.5 hover:border-[rgb(var(--accent-soft))]/55 hover:bg-[rgba(18,14,38,0.96)] hover:shadow-[0_40px_80px_-25px_rgba(123,115,253,0.55)] active:scale-[0.985] disabled:cursor-progress disabled:opacity-70"
+      >
+        {/* Left-edge accent — slides in on hover, matches RowLink. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-1/2 h-12 w-[3px] -translate-y-1/2 rounded-r-full bg-linear-to-b from-transparent via-[rgb(var(--accent-soft))] to-transparent opacity-0 transition group-hover:opacity-100"
         />
-        <div className="flex min-w-0 flex-1 flex-col leading-tight">
-          <span className="truncate text-caption text-white">
-            {p.legacy.deceasedName}
-          </span>
-          <span className="truncate label-mono text-meta capitalize text-tertiary">
-            {p.legacy.relationship}
-            <span className="mx-1.5 text-white/20">·</span>
-            {p.question.source.replace(/_/g, " ")}
+        <div className="relative flex items-center gap-3">
+          <Avatar
+            name={p.legacy.deceasedName}
+            imageUrl={p.legacy.referenceImageUrl}
+            size={36}
+            rounded="rounded-full"
+          />
+          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate text-caption text-white">
+              {p.legacy.deceasedName}
+            </span>
+            <span className="truncate label-mono text-meta capitalize text-tertiary">
+              {p.legacy.relationship}
+              <span className="mx-1.5 text-white/20">·</span>
+              {p.question.source.replace(/_/g, " ")}
+            </span>
+          </div>
+          <span className="shrink-0 label-mono text-meta text-[rgb(var(--accent-soft))]">
+            {pending ? <Spinner className="h-3.5 w-3.5" /> : <span aria-hidden>→</span>}
           </span>
         </div>
-        <span className="shrink-0 opacity-0 transition group-hover:opacity-100 label-mono text-meta text-[rgb(var(--accent-soft))]">
-          →
-        </span>
-      </div>
-      <p className="relative mt-3 serif text-title leading-snug text-primary line-clamp-3">
-        {p.question.text}
-      </p>
-    </button>
+        <p className="relative mt-3 serif text-title leading-snug text-primary line-clamp-3">
+          {p.question.text}
+        </p>
+      </button>
+
+      {/* Pin-to-hero — a tiny escape hatch so the previous "answer here on
+          the home page" inline flow stays one tap away. The outer button
+          handles the primary "open chat" intent; this lives on top of it
+          and stops propagation so taps don't double-fire. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPin();
+        }}
+        aria-label="Bring this question centre-stage to answer here"
+        className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/40 text-[rgb(var(--accent-soft))] opacity-0 transition hover:border-[rgb(var(--accent-soft))]/60 hover:bg-black/65 group-hover/tile:opacity-100 focus-visible:opacity-100"
+      >
+        <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5">
+          <path
+            d="M12 3l1.8 5.6L19 10l-5.2 1.4L12 17l-1.8-5.6L5 10l5.2-1.4L12 3z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }
 

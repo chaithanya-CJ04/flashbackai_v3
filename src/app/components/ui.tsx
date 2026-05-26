@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { MediaImg } from "./MediaImg";
 
 /** Centered column with responsive max-widths.
  *
@@ -548,7 +549,11 @@ export function EntityMedia({
   rounded?: string;
   className?: string;
 }) {
-  const candidates = [entity.thumbnailUrl, entity.imageUrl].filter(
+  // Prefer the full-resolution `imageUrl` for display; fall back to
+  // `thumbnailUrl` only if the full image isn't available or fails to
+  // load. Previous order had this backwards, which made every entity
+  // card render the low-res thumbnail even when a full image existed.
+  const candidates = [entity.imageUrl, entity.thumbnailUrl].filter(
     (u): u is string => !!u && /^https?:\/\//i.test(u)
   );
   const [idx, setIdx] = useState(0);
@@ -566,11 +571,11 @@ export function EntityMedia({
       style={{ width: size, height: size }}
     >
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <MediaImg
           src={src}
           alt={entity.name ?? ""}
           className="absolute inset-0 h-full w-full object-cover"
+          skeletonRounded={rounded}
           onError={() => {
             if (idx < candidates.length - 1) setIdx((i) => i + 1);
             else setFailed(true);
